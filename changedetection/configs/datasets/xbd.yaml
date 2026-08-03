@@ -1,0 +1,39 @@
+﻿# XBD (xBD) 数据集配置
+# 1 种目标类型 (Building) × 5 种损坏等级
+dataset: xbd
+num_targets: 1
+num_states: 5
+
+target_names:
+  - Building
+
+state_names:
+  - no-damage
+  - minor-damage
+  - major-damage
+  - destroyed
+  - un-classified
+
+clip_text_prompts:
+  - "building, structure, house"
+
+# target_idx → [valid state_idx, ...]
+target_valid_states:
+  0: [0, 1, 2, 3, 4]
+
+# train_id → [target_idx, state_idx]
+# XBD 像素级标注直接用 train_id
+train_id_map:
+  0: [0, 0]   # background → Building/no-damage (不参与检测)
+  1: [0, 0]   # no-damage
+  2: [0, 1]   # minor-damage
+  3: [0, 2]   # major-damage
+  4: [0, 3]   # destroyed
+  5: [0, 4]   # un-classified
+
+state_clip_prompts:
+  - "intact undamaged building"
+  - "building with minor damage"
+  - "building with major damage, severe structural damage"
+  - "destroyed collapsed building, complete destruction"
+  - "unclassified building damage"
