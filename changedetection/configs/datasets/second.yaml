@@ -1,0 +1,42 @@
+﻿# SECOND 数据集配置 (V5: 双分支)
+# 语义变化检测：只有 Building 类，前后时相跨度大
+dataset: second
+num_targets: 1
+num_states: 3
+
+target_names:
+  - Building
+
+state_names:
+  - NoChange
+  - Reduced
+  - Added
+
+clip_text_prompts:
+  - "building, structure, house"
+
+target_valid_states:
+  0: [0, 1, 2]
+
+train_id_map:
+  1: [0, 0]   # building_nochange
+  2: [0, 1]   # building_reduced (pre has, post doesn't)
+  3: [0, 2]   # building_added (post has, pre doesn't)
+
+state_clip_prompts:
+  - "unchanged building, no change"
+  - "destroyed removed building"
+  - "newly constructed building"
+
+# V5: 分支路由 - Building 同时走实例和语义分支
+branch_routing:
+  Building: instance
+
+# V5: 分支配置
+branch_config:
+  instance:
+    num_queries_per_scale: 17
+    num_decoder_layers: 6
+  semantic:
+    fpn_channels: 128
+    output_stride: 4
