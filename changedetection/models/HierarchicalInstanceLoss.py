@@ -1,33 +1,38 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """
 Hierarchical Instance Detection Loss
 
-?????????:
-  - Top-K One-to-Many ?? (bbox + target type + focal)
-  - Focal Loss ????????? (???? 92%)
-  - Dice Loss ?????? (?????)
-  - L1 + GIoU bbox ??
-  - ????? (?? decoder ?????)
-  - ??????? (???????????)
+根据数据集特点设计:
+  - Hungarian 匹配 (bbox + target type + focal)
+  - Focal Loss 处理目标类型不平衡 (建筑物占 92%)
+  - Dice Loss 辅助状态分类 (处理小目标)
+  - L1 + GIoU bbox 回归
+  - 辅助层损失 (辅助 decoder 中间层监督)
+  - 层级有效性约束 (非法状态不参与损失计算)
 
-???? (??):
+损失权重 (可调):
   bbox: 2.0, giou: 1.5, target: 3.0, state: 2.0, aux: 0.4  (V3)
-  V4: pair-weighted state loss, ??(target, state)???????
 """
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from scipy.optimize import linear_sum_assignment
 
-from HICD.changedetection.models.class_mapping import (
-    DatasetConfig, NUM_TARGETS, NUM_STATES, TARGET_VALID_STATES,
+from HICD_v5.changedetection.models.class_mapping import (
+    NUM_TARGETS, NUM_STATES, TARGET_VALID_STATES,
 )
 
 
 # =====================================================================
-# Focal Loss (???????)
+# Focal Loss (处理类别不平衡)
 # =====================================================================
 class FocalLoss(nn.Module):
+    """
+    Focal Loss: 降低易分类样本的权重, 聚焦于难分类样本。
+
+    设计依据: 数据集中建筑物占比高达 92%, 普通交叉熵会被
+    大量简单样本主导。Focal Loss 通过 (1-pt)^gamma 抑制简单样本。
+    """
     def __init__(self, alpha=0.25, gamma=2.0):
         super().__init__()
         self.alpha = alpha
@@ -41,14 +46,22 @@ class FocalLoss(nn.Module):
 
 
 # =====================================================================
-# Dice Loss (??????)
+# Dice Loss (辅助状态分类)
 # =====================================================================
 class DiceLoss(nn.Module):
+    """
+    Dice Loss: 对类别不平衡更鲁棒, 适合小目标。
+    用于状态分类的辅助损失。
+    """
     def __init__(self, smooth=1.0):
         super().__init__()
         self.smooth = smooth
 
     def forward(self, pred, target):
+        """
+        pred:   (N, C) logits
+        target: (N,) long class indices
+        """
         pred_soft = F.softmax(pred, dim=-1)
         target_onehot = F.one_hot(target, num_classes=pred.shape[-1]).float()
         intersection = (pred_soft * target_onehot).sum(dim=0)
@@ -58,18 +71,26 @@ class DiceLoss(nn.Module):
 
 
 # =====================================================================
-# ?????
+# 主损失函数
 # =====================================================================
 class HierarchicalInstanceLoss(nn.Module):
-    def __init__(self, num_targets=NUM_TARGETS, num_states=NUM_STATES, dataset_config=None,
+    """
+    层级实例检测损失
+
+    匹配策略: 基于 (bbox L1 + GIoU + focal target) 的 Hungarian 匹配
+    损失组成:
+      - L_bbox: L1 距离
+      - L_giou: Generalized IoU
+      - L_target: Focal Loss (目标类型分类)
+      - L_state: CrossEntropy + Dice (变化状态分类, 有效性掩码)
+      - L_aux: 辅助层损失 (权重衰减)
+    """
+    def __init__(self, num_targets=NUM_TARGETS, num_states=NUM_STATES,
                  weight_bbox=2.0, weight_giou=1.5,
                  weight_target=3.0, weight_state=2.0,
                  weight_aux=0.4, focal_alpha=0.25, focal_gamma=2.0,
                  class_weights=None, topk=3):
         super().__init__()
-        if dataset_config:
-            num_targets = dataset_config.num_targets
-            num_states = dataset_config.num_states
         self.num_targets = num_targets
         self.num_states = num_states
         self.weight_bbox = weight_bbox
@@ -83,10 +104,19 @@ class HierarchicalInstanceLoss(nn.Module):
         self.dice_loss = DiceLoss()
         self.state_loss_fn = nn.CrossEntropyLoss(weight=class_weights)
 
-        # V4: per (target, state) pair weighting for rare combinations
-        self.register_buffer('pair_weights', self._default_pair_weights())
-
     def forward(self, outputs, gt_boxes_list, gt_target_list, gt_state_list):
+        """
+        Args:
+            outputs: dict from HierarchicalInstanceHead.forward()
+                pred_boxes, pred_target, pred_state, aux_outputs
+            gt_boxes_list:   list of (M_i, 4) — normalized [cx,cy,w,h]
+            gt_target_list:  list of (M_i,) — target type indices 0-15
+            gt_state_list:   list of (M_i,) — change state indices 0-5
+
+        Returns:
+            loss: scalar tensor
+            loss_dict: dict of individual loss components
+        """
         pred_boxes = outputs['pred_boxes']
         pred_target = outputs['pred_target']
         pred_state = outputs['pred_state']
@@ -95,11 +125,13 @@ class HierarchicalInstanceLoss(nn.Module):
         B = pred_boxes.shape[0]
         device = pred_boxes.device
 
+        # ── 主损失 ──
         main_loss, main_dict = self._compute_set_loss(
             pred_boxes, pred_target, pred_state,
             gt_boxes_list, gt_target_list, gt_state_list,
         )
 
+        # ── 辅助层损失 ──
         aux_loss = torch.tensor(0.0, device=device)
         aux_dict = {}
         for aux_i, aux_out in enumerate(aux_outputs):
@@ -112,6 +144,7 @@ class HierarchicalInstanceLoss(nn.Module):
             for k, v in a_d.items():
                 aux_dict[f'aux{aux_i}_{k}'] = v
 
+        # ── 总损失 ──
         total_loss = main_loss + self.weight_aux * aux_loss
 
         loss_dict = {**main_dict, 'loss_aux': aux_loss.item(), 'loss_total': total_loss.item()}
@@ -121,6 +154,7 @@ class HierarchicalInstanceLoss(nn.Module):
 
     def _compute_set_loss(self, pred_boxes, pred_target, pred_state,
                           gt_boxes_list, gt_target_list, gt_state_list):
+        """单层的 set prediction loss (Hungarian matching)"""
         B = pred_boxes.shape[0]
         device = pred_boxes.device
 
@@ -135,98 +169,60 @@ class HierarchicalInstanceLoss(nn.Module):
             gt_target = gt_target_list[b].to(device)
             gt_state = gt_state_list[b].to(device)
             M = gt_boxes.shape[0]
-            N = pred_boxes.shape[1]
 
             if M == 0:
                 continue
 
-            # ?? ????: bbox L1 + GIoU + focal target ??
-            pred_b = pred_boxes[b]  # (N, 4)
-            tgt_b = gt_boxes        # (M, 4)
+            # ── One-to-Many Top-K 匹配 (V3) ──
+            cost_bbox = torch.cdist(pred_boxes[b], gt_boxes, p=1)
 
-            # L1 cost
-            cost_bbox = torch.cdist(pred_b, tgt_b, p=1)  # (N, M)
+            cost_giou = -self._generalized_box_iou(
+                self._cxcywh_to_xyxy(pred_boxes[b]),
+                self._cxcywh_to_xyxy(gt_boxes)
+            )
 
-            # GIoU cost
-            pred_xyxy = self._cxcywh_to_xyxy(pred_b)
-            gt_xyxy = self._cxcywh_to_xyxy(tgt_b)
-            giou = self._generalized_box_iou(pred_xyxy, gt_xyxy)  # (N, M)
-            cost_giou = -giou
+            prob_t = pred_target[b].softmax(-1)
+            target_prob_gt = prob_t[:, gt_target]
+            cost_target = -torch.log(target_prob_gt.clamp(min=1e-6))
 
-            # Focal target cost
-            with torch.no_grad():
-                tgt_logits = pred_target[b]  # (N, num_targets)
-                prob = tgt_logits.softmax(-1)  # (N, C)
-                cost_target = -prob[:, gt_target]  # (N, M)
+            cost_matrix = (
+                self.weight_bbox * cost_bbox.detach() +
+                self.weight_giou * cost_giou.detach() +
+                self.weight_target * cost_target.detach()
+            )  # (Q, M)
+            cost_matrix = torch.nan_to_num(cost_matrix, nan=1e6, posinf=1e6, neginf=-1e6)
 
-            # ???
-            C = (self.weight_bbox * cost_bbox +
-                 self.weight_giou * cost_giou +
-                 self.weight_target * cost_target)
-            C = C.detach().cpu()
+            # 每个 GT 匹配 Top-K 个 query (V3: one-to-many)
+            Q = cost_matrix.shape[0]
+            K = min(self.topk, Q)
+            _, topk_indices = cost_matrix.topk(K, dim=0, largest=False)  # (K, M)
+            row_ind = topk_indices.flatten().clamp(0, Q - 1).cpu().numpy()
+            col_ind = torch.arange(M).unsqueeze(0).expand(K, -1).flatten().cpu().numpy()
 
-            # ?? Top-K One-to-Many ?? ??
-            # ??? GT, ? cost ??? top-K ? query
-            K = min(self.topk, N)
-            topk_vals, topk_idx = C.topk(K, dim=0, largest=False)  # (K, M)
+            # ── bbox 损失 ──
+            total_bbox = total_bbox + F.l1_loss(
+                pred_boxes[b][row_ind], gt_boxes[col_ind]
+            )
+            total_giou = total_giou + (1 - torch.diag(
+                self._generalized_box_iou(
+                    self._cxcywh_to_xyxy(pred_boxes[b][row_ind]),
+                    self._cxcywh_to_xyxy(gt_boxes[col_ind])
+                )
+            )).mean()
 
-            # ????????: K*M ?
-            cost_k = topk_vals.T.reshape(-1)  # (M*K,)
-            gt_rep = torch.arange(M).repeat_interleave(K)  # (M*K,)
-            q_rep = topk_idx.T.reshape(-1)  # (M*K,)
+            # ── target focal loss ──
+            total_target = total_target + self.focal_loss(
+                pred_target[b][row_ind], gt_target[col_ind]
+            )
 
-            # ? Hungarian ?????????
-            # (M*K ????? M, ?????????????)
-            # ?????????? (query, gt) ????
-            # ?????, ??? topk ???? (? GT ??? query)
-            # ?????? query, ?????
-            if K >= 1:
-                # ????: ?? GT ?? cost ??? query
-                row_ind = topk_idx[0]  # (M,) ?? query indices
-                col_ind = torch.arange(M)  # (0..M-1) GT indices
-                # ??: ???? GT ???? query, ??? cost ???
-                unique_q, inv = row_ind.unique(return_inverse=True)
-                keep = []
-                for q in unique_q:
-                    mask = (row_ind == q)
-                    costs_q = C[q, col_ind[mask]]
-                    best_gt = col_ind[mask][costs_q.argmin()]
-                    keep.append((q.item(), best_gt.item()))
-                if len(keep) > 0:
-                    row_ind = torch.tensor([k[0] for k in keep], dtype=torch.long)
-                    col_ind = torch.tensor([k[1] for k in keep], dtype=torch.long)
-                else:
-                    n_matched += 0
-                    continue
-
-            # ?? ?????? ??
-            matched_pred_boxes = pred_b[row_ind]  # (K', 4)
-            matched_gt_boxes = tgt_b[col_ind]     # (K', 4)
-
-            # Bbox L1 loss
-            total_bbox = total_bbox + F.l1_loss(matched_pred_boxes, matched_gt_boxes, reduction='mean')
-
-            # GIoU loss
-            mp_xyxy = self._cxcywh_to_xyxy(matched_pred_boxes)
-            mg_xyxy = self._cxcywh_to_xyxy(matched_gt_boxes)
-            giou_matched = self._generalized_box_iou(mp_xyxy, mg_xyxy)
-            total_giou = total_giou + (1 - torch.diag(giou_matched)).mean()
-
-            # Target classification loss (focal)
-            matched_pred_target = pred_target[b][row_ind]  # (K', num_targets)
-            matched_gt_target_for_cls = gt_target[col_ind]  # (K',)
-            total_target = total_target + self.focal_loss(matched_pred_target, matched_gt_target_for_cls)
-
-            # V4: pair-weighted state loss
+            # ── state loss (仅合法状态) ──
             matched_pred_state = pred_state[b][row_ind]
             matched_gt_state = gt_state[col_ind]
-            matched_gt_target = gt_target[col_ind]
 
-            pw = self.pair_weights[matched_gt_target, matched_gt_state]
-            ce_per_sample = F.cross_entropy(matched_pred_state, matched_gt_state, reduction='none')
-            total_state = total_state + (pw * ce_per_sample).mean()
-
-            # Dice
+            total_state = total_state + self.state_loss_fn(
+                matched_pred_state, matched_gt_state
+            )
+            # Dice 辅助
             total_state = total_state + self.dice_loss(
                 matched_pred_state, matched_gt_state
             )
@@ -250,22 +246,9 @@ class HierarchicalInstanceLoss(nn.Module):
         }
 
     @staticmethod
-    def _default_pair_weights():
-        w = torch.ones(10, 6)
-        # Damaged/Reduced/Added/Extended: moderate boost
-        w[:, 1] = 1.5
-        w[:, 2] = 1.5
-        w[:, 3] = 1.5
-        w[:, 4] = 1.5
-        # Replaced (Aircraft=7, Vessel=8): high weight, rare
-        w[7, 5] = 3.0
-        w[8, 5] = 3.0
-        return w
-
-    @staticmethod
     def _cxcywh_to_xyxy(x):
         xc, yc, w, h = x.unbind(-1)
-        return torch.stack([xc - w/2, yc - h/2, xc + w/2, yc + h/2], dim=-1)
+        return torch.stack([xc - w/2, yc - w/2, xc + w/2, yc + h/2], dim=-1)
 
     @staticmethod
     def _generalized_box_iou(boxes1, boxes2):
@@ -287,5 +270,3 @@ class HierarchicalInstanceLoss(nn.Module):
         enclose = (enclose_x2 - enclose_x1) * (enclose_y2 - enclose_y1)
 
         return iou - (enclose - union) / enclose.clamp(min=1e-6)
-
-

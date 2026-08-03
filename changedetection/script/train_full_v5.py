@@ -2,20 +2,11 @@
 # -*- coding: utf-8 -*-
 """
 HICD V5 双分支训练脚本
-
-路径策略: 脚本自动检测项目根目录，所有默认路径相对于项目根目录。
-PYTHONPATH 需要包含项目根目录的父目录（即 HICD_v5/ 所在目录）。
-
-用法 (Linux/WSL):
-    # 假设项目在 /path/to/HICD_v5
-    export PYTHONPATH="/path/to:$PYTHONPATH"
+用法:
+    cd /mnt/f/mambacd/home
+    export PYTHONPATH="/mnt/f/mambacd/home:$PYTHONPATH"
+    source ~/miniconda/bin/activate && conda activate mamba
     python HICD_v5/changedetection/script/train_full_v5.py \
-        --dataset 0617final --batch_size 4 --max_epochs 100 --use_amp
-
-用法 (Windows):
-    # 假设项目在 F:\mambacd\home\HICD_v5
-    set PYTHONPATH=F:\mambacd\home;%PYTHONPATH%
-    python HICD_v5\changedetection\script\train_full_v5.py ^
         --dataset 0617final --batch_size 4 --max_epochs 100 --use_amp
 """
 import warnings
@@ -29,22 +20,13 @@ import argparse
 import numpy as np
 from pathlib import Path
 
-# ── 自动检测项目根目录 (HICD_v5/) ──
-# 脚本位于 HICD_v5/changedetection/script/train_full_v5.py
-# 向上 3 级到 HICD_v5/
-_SCRIPT_DIR = Path(__file__).resolve().parent
-_PROJECT_ROOT = _SCRIPT_DIR.parent.parent  # HICD_v5/
-
-# 确保项目根目录的父目录在 sys.path (for HICD_v5.* imports)
-_PARENT = str(_PROJECT_ROOT.parent)
-if _PARENT not in sys.path:
-    sys.path.insert(0, _PARENT)
-
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, ConcatDataset
 from tqdm import tqdm
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../..")))
 
 from HICD_v5.changedetection.configs.config import get_config
 from HICD_v5.changedetection.datasets.dataset_v5 import ChangeDetectionDatasetV5
@@ -61,25 +43,11 @@ gdal.UseExceptions()
 
 
 def win_to_wsl(path):
-    """Windows 路径 → WSL 路径 (D:\\xxx → /mnt/d/xxx)"""
     if path and len(path) >= 2 and path[1] == ':':
         drive = path[0].lower()
         rest = path[2:].replace('\\', '/')
         return f"/mnt/{drive}{rest}"
     return path
-
-
-def resolve_path(path_str, project_root=None):
-    """将路径字符串解析为绝对路径。
-    - 如果已是绝对路径，直接返回
-    - 否则相对于 project_root 解析
-    """
-    if project_root is None:
-        project_root = _PROJECT_ROOT
-    p = Path(path_str)
-    if p.is_absolute():
-        return str(p)
-    return str((project_root / p).resolve())
 
 
 def collate_fn(batch):
@@ -105,17 +73,7 @@ class TrainerV5:
         self.args = args
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print(f"Device: {self.device}")
-        print(f"Project root: {_PROJECT_ROOT}")
 
-        # ── 解析路径: 相对路径 → 绝对路径 ──
-        args.data_dir = resolve_path(args.data_dir)
-        args.classes_csv = resolve_path(args.classes_csv) if args.classes_csv else None
-        args.pretrained_weight_path = resolve_path(args.pretrained_weight_path) if args.pretrained_weight_path else None
-        args.clip_weights_path = resolve_path(args.clip_weights_path) if args.clip_weights_path else None
-        args.cfg = resolve_path(args.cfg) if args.cfg else None
-        args.output_dir = resolve_path(args.output_dir)
-
-        # WSL 兼容
         args.data_dir = win_to_wsl(args.data_dir)
         args.classes_csv = win_to_wsl(args.classes_csv) if args.classes_csv else None
 
@@ -165,21 +123,20 @@ class TrainerV5:
             raise ValueError("No training data found!")
 
         self.train_dataset = ConcatDataset(train_datasets) if len(train_datasets) > 1 else train_datasets[0]
-        self.val_dataset = ConcatDataset(val_datasets) if len(val_datasets) > 1 else (val_datasets[0] if val_datasets else None)
+        self.val_dataset = ConcatDataset(val_datasets) if len(val_datasets) > 1 else val_datasets[0] if val_datasets else None
 
-        print(f"\nDataset loaded: {len(self.train_dataset)} train, "
-              f"{len(self.val_dataset) if self.val_dataset else 0} val")
+        print(f"\nTotal: train={len(self.train_dataset)}, val={len(self.val_dataset) if self.val_dataset else 0}")
 
         self.train_loader = DataLoader(
             self.train_dataset, batch_size=args.batch_size,
             shuffle=True, num_workers=args.num_workers,
-            collate_fn=collate_fn, pin_memory=True, drop_last=True,
+            collate_fn=collate_fn, drop_last=True, pin_memory=True,
         )
         self.val_loader = DataLoader(
             self.val_dataset, batch_size=args.batch_size,
             shuffle=False, num_workers=args.num_workers,
             collate_fn=collate_fn, pin_memory=True,
-        ) if self.val_dataset else None
+        ) if self.val_dataset is not None else None
 
         # ── Model ──
         print("\nBuilding model...")
@@ -187,58 +144,56 @@ class TrainerV5:
         cfg.defrost()
         vssm = cfg.MODEL.VSSM
         cfg_dict = {
-            'norm_layer': vssm.NORM_LAYER,
-            'ssm_act_layer': vssm.SSM_ACT_LAYER,
-            'mlp_act_layer': vssm.MLP_ACT_LAYER,
-            'ssm_d_state': vssm.SSM_D_STATE,
-            'ssm_ratio': vssm.SSM_RATIO,
-            'ssm_dt_rank': vssm.SSM_DT_RANK,
-            'ssm_conv': vssm.SSM_CONV,
-            'ssm_conv_bias': vssm.SSM_CONV_BIAS,
-            'ssm_drop_rate': vssm.SSM_DROP_RATE,
-            'ssm_init': vssm.SSM_INIT,
-            'forward_type': vssm.SSM_FORWARDTYPE,
-            'mlp_ratio': vssm.MLP_RATIO,
-            'mlp_drop_rate': vssm.MLP_DROP_RATE,
-            'gmlp': vssm.GMLP,
+            'norm_layer': vssm.NORM_LAYER, 'ssm_act_layer': vssm.SSM_ACT_LAYER,
+            'mlp_act_layer': vssm.MLP_ACT_LAYER, 'ssm_d_state': vssm.SSM_D_STATE,
+            'ssm_ratio': vssm.SSM_RATIO, 'ssm_dt_rank': vssm.SSM_DT_RANK,
+            'ssm_conv': vssm.SSM_CONV, 'ssm_conv_bias': vssm.SSM_CONV_BIAS,
+            'ssm_drop_rate': vssm.SSM_DROP_RATE, 'ssm_init': vssm.SSM_INIT,
+            'forward_type': vssm.SSM_FORWARDTYPE, 'mlp_ratio': vssm.MLP_RATIO,
+            'mlp_drop_rate': vssm.MLP_DROP_RATE, 'gmlp': vssm.GMLP,
             'use_checkpoint': cfg.TRAIN.USE_CHECKPOINT,
             'drop_path_rate': cfg.MODEL.DROP_PATH_RATE,
-            'patch_size': vssm.PATCH_SIZE,
-            'in_chans': vssm.IN_CHANS,
-            'embed_dim': vssm.EMBED_DIM,
-            'depths': vssm.DEPTHS,
-            'downsample': vssm.DOWNSAMPLE,
-            'patchembed': vssm.PATCHEMBED,
+            'patch_size': vssm.PATCH_SIZE, 'in_chans': vssm.IN_CHANS,
+            'embed_dim': vssm.EMBED_DIM, 'depths': vssm.DEPTHS,
+            'downsample': vssm.DOWNSAMPLE, 'patchembed': vssm.PATCHEMBED,
             'patch_norm': vssm.PATCH_NORM,
         }
 
         self.model = HICD_v5(
             pretrained=args.pretrained_weight_path,
+            dataset_config=dataset_config,
             num_queries_per_scale=args.num_queries,
-            clip_weights_path=args.clip_weights_path,
             clip_mode=args.clip_mode,
+            clip_weights_path=args.clip_weights_path,
             **cfg_dict,
         ).to(self.device)
 
         total_params = sum(p.numel() for p in self.model.parameters()) / 1e6
-        trainable = sum(p.numel() for p in self.model.parameters() if p.requires_grad) / 1e6
-        print(f"Model parameters: {total_params:.2f}M (trainable: {trainable:.2f}M)")
+        print(f"Model parameters: {total_params:.2f}M")
 
-        # CLIP two-stage
+        # ── CLIP two-stage ──
         if args.clip_unfreeze_epoch == -1:
             print("[Two-Stage] CLIP always unfrozen")
             self.model.clip_text_encoder.unfreeze(n_layers=2)
-        elif args.clip_unfreeze_epoch == 0:
-            print("[Two-Stage] CLIP always frozen")
         else:
             print(f"[Two-Stage] CLIP frozen until epoch {args.clip_unfreeze_epoch}")
 
         # ── Loss ──
-        self.criterion_instance = HierarchicalInstanceLoss(
-            num_targets=NUM_TARGETS, num_states=NUM_STATES,
+        instance_loss = HierarchicalInstanceLoss(
+            num_targets=dataset_config.num_targets if dataset_config else NUM_TARGETS,
+            num_states=dataset_config.num_states if dataset_config else NUM_STATES,
         ).to(self.device)
-        self.criterion_semantic = DualBranchLoss(
-            num_targets=NUM_TARGETS, num_states=NUM_STATES,
+
+        # 语义分支类别数（semantic targets + background）
+        num_sem_targets = len(dataset_config.get_branch_targets('semantic')) + 1 if dataset_config else 5
+        num_states = dataset_config.num_states if dataset_config else NUM_STATES
+
+        self.criterion = DualBranchLoss(
+            instance_loss=instance_loss,
+            num_target_classes=num_sem_targets,
+            num_state_classes=num_states,
+            w_instance=args.w_instance,
+            w_semantic=args.w_semantic,
         ).to(self.device)
 
         # ── Optimizer ──
@@ -247,162 +202,139 @@ class TrainerV5:
             weight_decay=args.weight_decay,
         )
 
-        # LR scheduler
+        # ── LR Scheduler ──
         total_steps = len(self.train_loader) * args.max_epochs
         warmup_steps = len(self.train_loader) * 5
         self.total_steps = total_steps
         self.warmup_steps = warmup_steps
         self.base_lr = args.learning_rate
 
+        # ── AMP ──
         self.scaler = torch.amp.GradScaler(enabled=args.use_amp)
 
         # ── Save dir ──
         self.save_dir = os.path.join(args.output_dir, args.exp_name)
         os.makedirs(self.save_dir, exist_ok=True)
+        self.best_loss = float('inf')
         self.best_map = 0.0
         self.start_epoch = 0
 
-        # Resume
-        if args.resume:
-            print(f"Resuming from {args.resume}")
-            ckpt = torch.load(args.resume, map_location=self.device)
-            self.model.load_state_dict(ckpt['model_state_dict'])
-            self.optimizer.load_state_dict(ckpt['optimizer_state_dict'])
-            self.start_epoch = ckpt.get('epoch', 0)
-            self.best_map = ckpt.get('best_map', 0.0)
-
-        # Metrics
+        # ── Metrics ──
         self.metrics = InstanceMetrics(
             num_targets=NUM_TARGETS, num_states=NUM_STATES,
             target_names=TARGET_NAMES, state_names=STATE_NAMES,
         )
-        self.val_results = {}
-
-    def _get_lr(self, step):
-        if step < self.warmup_steps:
-            return self.base_lr * step / max(self.warmup_steps, 1)
-        progress = (step - self.warmup_steps) / max(self.total_steps - self.warmup_steps, 1)
-        return self.base_lr * 0.5 * (1 + np.cos(np.pi * progress))
 
     def train_epoch(self, epoch):
         self.model.train()
-        total_loss = 0.0
-        total_inst = 0.0
-        total_sem = 0.0
-        n_batches = 0
-        t0 = time.time()
+        total_loss = 0
+        num_batches = 0
+        epoch_start = time.time()
+        pbar = tqdm(self.train_loader, desc=f"Epoch {epoch+1}/{self.args.max_epochs}")
 
-        pbar = tqdm(self.train_loader, desc=f"Epoch {epoch+1}")
+        self.optimizer.zero_grad()
+        accum_steps = getattr(self.args, 'grad_accum', 1)
+
         for batch_idx, batch in enumerate(pbar):
-            pre_imgs = batch['pre_img'].to(self.device).float()
-            post_imgs = batch['post_img'].to(self.device).float()
-
+            pre_imgs = batch['pre_img'].to(self.device)
+            post_imgs = batch['post_img'].to(self.device)
             gt_boxes_list = [b.to(self.device) for b in batch['gt_boxes_list']]
-            gt_target_list = [b.to(self.device) for b in batch['gt_target_list']]
-            gt_state_list = [b.to(self.device) for b in batch['gt_state_list']]
-            gt_target_map = batch['gt_target_map'].to(self.device).long()
-            gt_state_map = batch['gt_state_map'].to(self.device).long()
-
-            # LR schedule
-            step = epoch * len(self.train_loader) + batch_idx
-            lr = self._get_lr(step)
-            for pg in self.optimizer.param_groups:
-                pg['lr'] = lr
+            gt_target_list = [t.to(self.device) for t in batch['gt_target_list']]
+            gt_state_list = [s.to(self.device) for s in batch['gt_state_list']]
+            gt_target_map = batch['gt_target_map'].to(self.device)
+            gt_state_map = batch['gt_state_map'].to(self.device)
 
             with torch.amp.autocast(device_type='cuda', enabled=self.args.use_amp):
                 outputs = self.model(pre_imgs, post_imgs)
-                loss_inst, _ = self.criterion_instance(
-                    outputs['instance'], gt_boxes_list, gt_target_list, gt_state_list)
-                loss_sem = self.criterion_semantic(
-                    outputs['semantic'], gt_target_map, gt_state_map)
-                loss = self.args.w_instance * loss_inst + self.args.w_semantic * loss_sem
+                gt_data = {
+                    'gt_boxes_list': gt_boxes_list,
+                    'gt_target_list': gt_target_list,
+                    'gt_state_list': gt_state_list,
+                    'gt_target_mask': gt_target_map,
+                    'gt_state_mask': gt_state_map,
+                }
+                loss, loss_dict = self.criterion(outputs, gt_data)
 
-            self.optimizer.zero_grad()
-            self.scaler.scale(loss).backward()
-            if self.args.grad_clip > 0:
-                self.scaler.unscale_(self.optimizer)
-                nn.utils.clip_grad_norm_(self.model.parameters(), self.args.grad_clip)
-            self.scaler.step(self.optimizer)
-            self.scaler.update()
+            scaled_loss = loss / accum_steps
+            self.scaler.scale(scaled_loss).backward()
+
+            if (batch_idx + 1) % accum_steps == 0:
+                if self.args.grad_clip > 0:
+                    self.scaler.unscale_(self.optimizer)
+                    nn.utils.clip_grad_norm_(self.model.parameters(), self.args.grad_clip)
+                self.scaler.step(self.optimizer)
+                self.scaler.update()
+                self.optimizer.zero_grad()
+                self.global_step = getattr(self, 'global_step', 0) + 1
+                if self.global_step < self.warmup_steps:
+                    lr = self.base_lr * self.global_step / self.warmup_steps
+                else:
+                    progress = (self.global_step - self.warmup_steps) / max(self.total_steps - self.warmup_steps, 1)
+                    lr = self.base_lr * 0.5 * (1 + np.cos(np.pi * progress))
+                for pg in self.optimizer.param_groups:
+                    pg['lr'] = lr
 
             total_loss += loss.item()
-            total_inst += loss_inst.item()
-            total_sem += loss_sem.item()
-            n_batches += 1
-
+            num_batches += 1
             pbar.set_postfix({
                 'loss': f"{loss.item():.4f}",
-                'inst': f"{loss_inst.item():.4f}",
-                'sem': f"{loss_sem.item():.4f}",
-                'lr': f"{lr:.2e}"
+                'l_inst': f"{loss_dict.get('loss_instance', 0):.4f}",
+                'l_sem': f"{loss_dict.get('loss_semantic', 0):.4f}",
+                'lr': f"{self.optimizer.param_groups[0]['lr']:.2e}"
             })
 
-        elapsed = time.time() - t0
-        sps = len(self.train_dataset) / max(elapsed, 1e-6)
-        print(f"  Train loss: {total_loss/n_batches:.4f} "
-              f"(inst={total_inst/n_batches:.4f}, sem={total_sem/n_batches:.4f}) "
-              f"| {sps:.1f} samples/s")
-
-        return total_loss / max(n_batches, 1)
+        epoch_time = time.time() - epoch_start
+        return total_loss / max(num_batches, 1)
 
     @torch.no_grad()
     def validate(self):
-        if self.val_loader is None:
-            self.val_results = {}
-            return 0.0
-
         self.model.eval()
-        total_loss = 0.0
-        n_batches = 0
-        all_preds = []
-        all_gts = []
-        t0 = time.time()
+        if self.val_loader is None:
+            return float('inf')
 
-        for batch in tqdm(self.val_loader, desc="Val"):
-            pre_imgs = batch['pre_img'].to(self.device).float()
-            post_imgs = batch['post_img'].to(self.device).float()
+        self.metrics.reset()
+        total_loss = 0
+        num_batches = 0
 
+        for batch in tqdm(self.val_loader, desc="Validating"):
+            pre_imgs = batch['pre_img'].to(self.device)
+            post_imgs = batch['post_img'].to(self.device)
             gt_boxes_list = [b.to(self.device) for b in batch['gt_boxes_list']]
-            gt_target_list = [b.to(self.device) for b in batch['gt_target_list']]
-            gt_state_list = [b.to(self.device) for b in batch['gt_state_list']]
-            gt_target_map = batch['gt_target_map'].to(self.device).long()
-            gt_state_map = batch['gt_state_map'].to(self.device).long()
+            gt_target_list = [t.to(self.device) for t in batch['gt_target_list']]
+            gt_state_list = [s.to(self.device) for s in batch['gt_state_list']]
+            gt_target_map = batch['gt_target_map'].to(self.device)
+            gt_state_map = batch['gt_state_map'].to(self.device)
 
             with torch.amp.autocast(device_type='cuda', enabled=self.args.use_amp):
                 outputs = self.model(pre_imgs, post_imgs)
-                loss_inst, _ = self.criterion_instance(
-                    outputs['instance'], gt_boxes_list, gt_target_list, gt_state_list)
-                loss_sem = self.criterion_semantic(
-                    outputs['semantic'], gt_target_map, gt_state_map)
-                loss = self.args.w_instance * loss_inst + self.args.w_semantic * loss_sem
+                gt_data = {
+                    'gt_boxes_list': gt_boxes_list,
+                    'gt_target_list': gt_target_list,
+                    'gt_state_list': gt_state_list,
+                    'gt_target_mask': gt_target_map,
+                    'gt_state_mask': gt_state_map,
+                }
+                loss, _ = self.criterion(outputs, gt_data)
 
+            self.metrics.update(outputs['instance_outputs'], gt_boxes_list, gt_target_list, gt_state_list)
             total_loss += loss.item()
-            n_batches += 1
+            num_batches += 1
 
-            # Collect predictions for metrics
-            pred_target = outputs['instance']['pred_target'].argmax(-1)  # (B, N)
-            pred_state = outputs['instance']['pred_state'].argmax(-1)
-            for b in range(len(gt_target_list)):
-                all_preds.append({
-                    'pred_target': pred_target[b].cpu(),
-                    'pred_state': pred_state[b].cpu(),
-                    'pred_boxes': outputs['instance']['pred_boxes'][b].cpu(),
-                })
-                all_gts.append({
-                    'gt_target': gt_target_list[b].cpu(),
-                    'gt_state': gt_state_list[b].cpu(),
-                    'gt_boxes': gt_boxes_list[b].cpu(),
-                })
+        val_loss = total_loss / max(num_batches, 1)
+        self.val_results = self.metrics.compute()
+        self.val_results['val_loss'] = val_loss
 
-        elapsed = time.time() - t0
-        sps = len(self.val_dataset) / max(elapsed, 1e-6) if self.val_dataset else 0
-        avg_loss = total_loss / max(n_batches, 1)
+        # DEBUG: predicted class distribution
+        from collections import Counter
+        all_preds = []
+        for t in self.metrics.pred_targets_all:
+            all_preds.extend(t.numpy().tolist())
+        dist = Counter(all_preds)
+        total_preds = sum(dist.values())
+        dist_pct = {k: f'{v/total_preds*100:.1f}%' for k, v in dist.most_common(5)}
+        print(f"  [DEBUG] Top-5 predicted targets: {dist_pct}")
 
-        r = self.metrics.compute_all(all_preds, all_gts)
-        r['infer_samples_per_sec'] = sps
-        self.val_results = r
-
-        return avg_loss
+        return val_loss
 
     def train(self):
         print(f"\n{'='*60}")
@@ -458,7 +390,7 @@ class TrainerV5:
                     'val_loss': val_loss,
                     'best_map': self.best_map,
                 }, save_path)
-                print(f"  New best mAP: {self.best_map:.4f}")
+                print(f"  ★ New best mAP: {self.best_map:.4f}")
 
             # Save latest
             torch.save({
@@ -476,9 +408,9 @@ class TrainerV5:
 def main():
     parser = argparse.ArgumentParser(description="HICD V5 Training")
     # Data
-    parser.add_argument("--data_dir", type=str, default="0617final")
+    parser.add_argument("--data_dir", type=str, default="HICD/0617final")
     parser.add_argument("--scenes", type=str, default="Airports,Ports,Urban-Rural Areas")
-    parser.add_argument("--classes_csv", type=str, default="0617final/classes.csv")
+    parser.add_argument("--classes_csv", type=str, default="HICD/0617final/classes.csv")
     parser.add_argument("--dataset", type=str, default=None)
     # Weights
     parser.add_argument("--pretrained_weight_path", type=str, default="weights/vssmtiny_dp01_ckpt_epoch_292.pth")
@@ -498,10 +430,10 @@ def main():
     parser.add_argument("--grad_accum", type=int, default=1)
     parser.add_argument("--grad_clip", type=float, default=1.0)
     # V5 dual-branch weights
-    parser.add_argument("--w_instance", type=float, default=3.0, help="实例分支损失权重")
+    parser.add_argument("--w_instance", type=float, default=3.0, help="实例分支损失权重（实例像素仅占2%，需要更强梯度）")
     parser.add_argument("--w_semantic", type=float, default=1.0, help="语义分支损失权重")
     # Output
-    parser.add_argument("--output_dir", type=str, default="outputs")
+    parser.add_argument("--output_dir", type=str, default="HICD/outputs")
     parser.add_argument("--exp_name", type=str, default="v5_dual_branch")
     parser.add_argument("--resume", type=str, default=None)
     # Config

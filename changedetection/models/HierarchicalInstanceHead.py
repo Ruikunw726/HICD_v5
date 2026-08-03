@@ -1,22 +1,22 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """
 Hierarchical Instance Detection Head
 
-鏍规嵁 0617final 鏁版嵁闆嗙壒鐐归噸鏂拌璁?
-  - 16 绉嶇洰鏍囩被鍨? 6 绉嶅彉鍖栫姸鎬? 灞傜骇鏈夋晥鎬х害鏉?
-  - 鏋佺灏哄害宸紓: 寮瑰潙 ~50px ? 鍐滅敯 ~262K px
-  - 涓ラ噸绫诲埆涓嶅钩琛? 寤虹瓚鐗╁崰姣旈珮杈?92%
-  - 3 涓満鏅? 鏈哄満/娓彛/鍩庝埂
+根据 0617final 数据集特点重新设计:
+  - 16 种目标类型, 6 种变化状态, 层级有效性约束
+  - 极端尺度差异: 弹坑 ~50px ? 农田 ~262K px
+  - 严重类别不平衡: 建筑物占比高达 92%
+  - 3 个场景: 机场/港口/城乡
 
-鏋舵瀯:
+架构:
   pixel_features (B, 128, H/4, W/4)
-    鈫?ScaleFPN (3 绾ч噾瀛楀: P3@1x, P4@2x, P5@4x)
-    鈫?Transformer Decoder (6 灞? 涓棿灞傝緟鍔╄緭鍑?
-    鈫?Scale-aware Query Embedding (34 queries 脳 3 scales)
-    鈫?棰勬祴澶?
-        bbox_head     鈫?(B, Q, 4)        [cx, cy, w, h] 鈭?[0,1]
-        target_head   鈫?(B, Q, 16)       鐩爣绫诲瀷 logits
-        state_head    鈫?(B, Q, 6)        鍙樺寲鐘舵€?logits (鏈夋晥鎬ф帺鐮?
+    → ScaleFPN (3 级金字塔: P3@1x, P4@2x, P5@4x)
+    → Transformer Decoder (6 层, 中间层辅助输出)
+    → Scale-aware Query Embedding (34 queries × 3 scales)
+    → 预测头:
+        bbox_head     → (B, Q, 4)        [cx, cy, w, h] ∈ [0,1]
+        target_head   → (B, Q, 16)       目标类型 logits
+        state_head    → (B, Q, 6)        变化状态 logits (有效性掩码)
 """
 import math
 import numpy as np
@@ -26,28 +26,27 @@ import torch.nn as nn
 import numpy as np
 import torch.nn.functional as F
 
-from HICD.changedetection.models.class_mapping import (
-    DatasetConfig,
+from HICD_v5.changedetection.models.class_mapping import (
     TARGET_NAMES, STATE_NAMES, NUM_TARGETS, NUM_STATES,
     CLIP_TEXT_PROMPTS, TARGET_VALID_STATES, get_valid_state_mask,
 )
 
 
 # =====================================================================
-# 澶氬昂搴︾壒寰侀噾瀛楀 (FPN)
+# 多尺度特征金字塔 (FPN)
 # =====================================================================
 class ScaleFPN(nn.Module):
     """
-    浠?ChangeDecoder 杈撳嚭鐨勫崟灏哄害鐗瑰緛鏋勫缓 3 绾ч噾瀛楀銆?
+    从 ChangeDecoder 输出的单尺度特征构建 3 级金字塔。
 
-    璁捐渚濇嵁: 鏁版嵁闆嗕腑鐩爣灏哄害璺ㄥ害杈?5000 鍊?
-    闇€瑕佸灏哄害鐗瑰緛鏉ヨ鐩栦笉鍚屽ぇ灏忕殑鐩爣銆?
+    设计依据: 数据集中目标尺度跨度达 5000 倍,
+    需要多尺度特征来覆盖不同大小的目标。
 
-      P3: 128ch @ H/4 脳 W/4   鈥?灏忕洰鏍?(寮瑰潙銆佸鍙?
-      P4: 128ch @ H/8 脳 W/8   鈥?涓洰鏍?(寤虹瓚銆佽溅杈?
-      P5: 128ch @ H/16 脳 W/16 鈥?澶х洰鏍?(鍐滅敯銆佽窇閬?
+      P3: 128ch @ H/4 × W/4   — 小目标 (弹坑、塔台)
+      P4: 128ch @ H/8 × W/8   — 中目标 (建筑、车辆)
+      P5: 128ch @ H/16 × W/16 — 大目标 (农田、跑道)
 
-    浣跨敤鑷《鍚戜笅璺緞 + 渚у悜杩炴帴杩涜鐗瑰緛铻嶅悎銆?
+    使用自顶向下路径 + 侧向连接进行特征融合。
     """
     def __init__(self, in_channels=128, out_channels=128):
         super().__init__()
@@ -83,12 +82,12 @@ class ScaleFPN(nn.Module):
 
 
 # =====================================================================
-# 灏哄害鎰熺煡鏌ヨ宓屽叆
+# 尺度感知查询嵌入
 # =====================================================================
 class ScaleAwareQueryEmbedding(nn.Module):
     """
-    涓烘瘡涓壒寰佸昂搴︾敓鎴愮嫭绔嬬殑鏌ヨ宓屽叆銆?
-    涓嶅悓灏哄害鐨勭壒寰佸浘瀵瑰簲涓嶅悓澶у皬鐨勭洰鏍? 鏌ヨ闇€瑕佹劅鐭ヨ嚜韬昂搴︺€?
+    为每个特征尺度生成独立的查询嵌入。
+    不同尺度的特征图对应不同大小的目标, 查询需要感知自身尺度。
     """
     def __init__(self, hidden_dim=128, num_queries_per_scale=34):
         super().__init__()
@@ -107,7 +106,7 @@ class ScaleAwareQueryEmbedding(nn.Module):
 
 
 # =====================================================================
-# 瀹炰緥绾ф娴嬪ご
+# 实例级检测头
 # =====================================================================
 
 class PositionalEncoding2D(nn.Module):
@@ -144,18 +143,18 @@ class PositionalEncoding2D(nn.Module):
 
 class HierarchicalInstanceHead(nn.Module):
     """
-    灞傜骇瀹炰緥妫€娴嬪ご: FPN 鈫?Transformer Decoder 鈫?鍒嗗眰棰勬祴
+    层级实例检测头: FPN → Transformer Decoder → 分层预测
 
-    鍒嗗眰棰勬祴閫昏緫:
-      1. target_head 棰勬祴 16 绉嶇洰鏍囩被鍨?
-      2. state_head 棰勬祴 6 绉嶅彉鍖栫姸鎬?
-      3. 閫氳繃 target_state_mask 纭繚鍙湁鍚堟硶鐨勭姸鎬佺粍鍚堣閫変腑
+    分层预测逻辑:
+      1. target_head 预测 16 种目标类型
+      2. state_head 预测 6 种变化状态
+      3. 通过 target_state_mask 确保只有合法的状态组合被选中
 
-    杈呭姪杈撳嚭:
-      涓棿 decoder 灞?(layer 2, 4) 涔熶骇鐢熼娴? 鐢ㄤ簬杈呭姪鎹熷け銆?
-      璁粌鏃惰繑鍥炴墍鏈夊眰鐨勯娴? 鎺ㄧ悊鏃跺彧鐢ㄦ渶鍚庝竴灞傘€?
+    辅助输出:
+      中间 decoder 层 (layer 2, 4) 也产生预测, 用于辅助损失。
+      训练时返回所有层的预测, 推理时只用最后一层。
     """
-    def __init__(self, visual_dim=128, num_queries_per_scale=34, dataset_config=None,
+    def __init__(self, visual_dim=128, num_queries_per_scale=34,
                  num_targets=NUM_TARGETS, num_states=NUM_STATES,
                  num_decoder_layers=6, nhead=8, dropout=0.1,
                  num_aux_layers=2):
@@ -167,23 +166,23 @@ class HierarchicalInstanceHead(nn.Module):
         self.num_decoder_layers = num_decoder_layers
         self.num_aux_layers = num_aux_layers
 
-        # 鈹€鈹€ FPN 鈹€鈹€
+        # ── FPN ──
         # V2: 2D sinusoidal positional encoding
         self.pos_enc = PositionalEncoding2D(visual_dim)
         self.fpn = ScaleFPN(in_channels=visual_dim, out_channels=visual_dim)
 
-        # 鈹€鈹€ 澶氬昂搴︾壒寰佹姇褰?鈹€鈹€
+        # ── 多尺度特征投影 ──
         self.scale_proj = nn.ModuleList([
             nn.Linear(visual_dim, visual_dim) for _ in range(3)
         ])
 
-        # 鈹€鈹€ 灏哄害鎰熺煡鏌ヨ宓屽叆 鈹€鈹€
+        # ── 尺度感知查询嵌入 ──
         self.query_embedding = ScaleAwareQueryEmbedding(
             hidden_dim=visual_dim,
             num_queries_per_scale=num_queries_per_scale
         )
 
-        # 鈹€鈹€ Transformer Decoder Layers (鎵嬪姩閬嶅巻浠ヨ幏鍙栦腑闂磋緭鍑? 鈹€鈹€
+        # ── Transformer Decoder Layers (手动遍历以获取中间输出) ──
         self.decoder_layers = nn.ModuleList([
             nn.TransformerDecoderLayer(
                 d_model=visual_dim, nhead=nhead,
@@ -195,7 +194,7 @@ class HierarchicalInstanceHead(nn.Module):
         ])
         self.decoder_norm = nn.LayerNorm(visual_dim)
 
-        # 鈹€鈹€ 杈呭姪灞傜储寮?鈹€鈹€
+        # ── 辅助层索引 ──
         aux_indices = []
         if num_aux_layers >= 1:
             aux_indices.append(num_decoder_layers // 3)
@@ -203,7 +202,7 @@ class HierarchicalInstanceHead(nn.Module):
             aux_indices.append(2 * num_decoder_layers // 3)
         self.aux_layer_indices = aux_indices
 
-        # 鈹€鈹€ 杈呭姪棰勬祴澶?鈹€鈹€
+        # ── 辅助预测头 ──
         self.aux_heads = nn.ModuleList()
         for _ in self.aux_layer_indices:
             self.aux_heads.append(nn.ModuleDict({
@@ -221,7 +220,7 @@ class HierarchicalInstanceHead(nn.Module):
                 ),
             }))
 
-        # 鈹€鈹€ 鏈€缁堥娴嬪ご 鈹€鈹€
+        # ── 最终预测头 ──
         self.bbox_head = nn.Sequential(
             nn.Linear(visual_dim, visual_dim), nn.GELU(),
             nn.Linear(visual_dim, visual_dim), nn.GELU(),
@@ -238,8 +237,8 @@ class HierarchicalInstanceHead(nn.Module):
         )
 
         # V3: Change attention for state classification
-        # 璺戦亾鍗犳弧鐢婚潰浣嗗脊鍧戝彧鏈夊嚑鍗佸儚绱? 鍏ㄥ眬骞冲潎浼氭饭娌℃崯鍧忎俊鍙枫€?
-        # 鐢?cross-attention 璁╂瘡涓疄渚嬫煡璇㈣仛鐒﹀埌鍙樺寲鏈€鍓х儓鐨勫尯鍩熴€?
+        # 跑道占满画面但弹坑只有几十像素, 全局平均会淹没损坏信号。
+        # 用 cross-attention 让每个实例查询聚焦到变化最剧烈的区域。
         self.change_attn = nn.MultiheadAttention(visual_dim, num_heads=4, dropout=0.1, batch_first=True)
         self.change_gate = nn.Sequential(
             nn.Linear(visual_dim * 2, visual_dim), nn.GELU(),
@@ -250,8 +249,12 @@ class HierarchicalInstanceHead(nn.Module):
             nn.Linear(visual_dim, num_states)
         )
 
-        # 鈹€鈹€ 灞傜骇鏈夋晥鎬х煩闃?鈹€鈹€
-        mask = dataset_config.get_valid_state_mask() if dataset_config else get_valid_state_mask()
+        # ── 层级有效性矩阵 ──
+        # Build mask dynamically
+        if num_targets != 10 or num_states != 6:
+            mask = torch.ones(num_targets, num_states)
+        else:
+            mask = get_valid_state_mask()
         self.register_buffer("target_state_mask", mask)
 
         self._pos_cache = {}
@@ -283,11 +286,11 @@ class HierarchicalInstanceHead(nn.Module):
         pred_state = pred_state + (1 - valid_mask).clamp(min=1e-6).log()
         return pred_state
 
-    def forward(self, pixel_features, text_features=None, multi_scale=False, state_text_features=None):
+    def forward(self, pixel_features, text_features=None, multi_scale=False):
         """
         Args:
             pixel_features: (B, 128, H/4, W/4)
-            text_features:  (16, text_dim) 鍙€?
+            text_features:  (16, text_dim) 可选
 
         Returns:
             dict:
@@ -295,7 +298,7 @@ class HierarchicalInstanceHead(nn.Module):
                 pred_target:  (B, Q, 16)
                 pred_state:   (B, Q, 6)
                 query_feats:  (B, Q, 128)
-                aux_outputs:  list of dict (杈呭姪灞傞娴?
+                aux_outputs:  list of dict (辅助层预测)
         """
         # V2: Handle multi-scale input from ChangeDecoder
         if multi_scale and isinstance(pixel_features, (list, tuple)):
@@ -310,17 +313,17 @@ class HierarchicalInstanceHead(nn.Module):
             scales = self.fpn(pixel_features)
 
 
-        # 2. 灞曞钩鎵€鏈夊昂搴?
+        # 2. 展平所有尺度
         memories = []
         for scale_idx, feat in enumerate(scales):
             memories.append(self._flatten_scale(feat, scale_idx))
         memory = torch.cat(memories, dim=1)  # (B, total_HW, C)
 
-        # 3. 鐢熸垚鏌ヨ
+        # 3. 生成查询
         queries = self.query_embedding(pixel_features.device)
         queries = queries.unsqueeze(0).expand(B, -1, -1)
 
-        # 4. 鎵嬪姩閬嶅巻 Decoder 灞?(鑾峰彇涓棿杈撳嚭)
+        # 4. 手动遍历 Decoder 层 (获取中间输出)
         instance_feats = queries
         aux_outputs = []
 
@@ -340,7 +343,7 @@ class HierarchicalInstanceHead(nn.Module):
                     'pred_state': aux_state,
                 })
 
-        # 5. 鏈€缁堝眰
+        # 5. 最终层
         instance_feats = self.decoder_norm(instance_feats)
         pred_boxes = self.bbox_head(instance_feats)
         pred_target = self.target_head(instance_feats)
@@ -354,7 +357,7 @@ class HierarchicalInstanceHead(nn.Module):
         pred_state = self.state_head_v3(fused)
         pred_state = self._apply_state_mask(pred_target, pred_state)
 
-        # 6. CLIP 鏂囨湰澧炲己
+        # 6. CLIP 文本增强
         if text_features is not None and text_features.shape[0] == self.num_targets:
             inst_norm = F.normalize(instance_feats, dim=-1)
             txt_norm = F.normalize(text_features, dim=-1)
@@ -372,6 +375,3 @@ class HierarchicalInstanceHead(nn.Module):
     @property
     def total_queries(self):
         return 3 * self.num_queries_per_scale
-
-
-

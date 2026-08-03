@@ -17,7 +17,9 @@ class MaskedDiceLoss(nn.Module):
             mask:  (B, H, W) bool, True = 有效像素（语义目标区域）
         """
         # 只在有效区域计算
-        pred_masked = pred[mask]       # (N, C)
+        C = pred.shape[1]
+        mask4d = mask.unsqueeze(1).expand_as(pred)  # (B,C,H,W)
+        pred_masked = pred[mask4d].reshape(-1, C)    # (N,C)
         target_masked = target[mask]   # (N,)
         if target_masked.numel() == 0:
             return torch.tensor(0.0, device=pred.device)
@@ -106,6 +108,12 @@ class DualBranchLoss(nn.Module):
         gt_state_mask = gt_data['gt_state_mask']
 
         # 语义 mask：gt_target_mask > 0 的像素才是语义目标区域
+        # Downsample GT to match semantic head output resolution
+        if gt_target_mask.shape[-1] != target_map.shape[-1]:
+            import torch.nn.functional as F
+            gt_target_mask = F.interpolate(gt_target_mask.float().unsqueeze(1), size=target_map.shape[2:], mode='nearest').squeeze(1).long()
+            gt_state_mask = F.interpolate(gt_state_mask.float().unsqueeze(1), size=state_map.shape[2:], mode='nearest').squeeze(1).long()
+
         sem_mask = (gt_target_mask > 0)  # (B, H, W)，True = 有语义目标
 
         # Target segmentation（只在语义目标区域计算）

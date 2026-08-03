@@ -1,38 +1,82 @@
-﻿# SECOND 数据集配置 (V5: 双分支)
-# 语义变化检测：只有 Building 类，前后时相跨度大
+# SECOND dataset config (V5: dual-branch)
+# 6 land-cover classes + 4 change states
 dataset: second
-num_targets: 1
-num_states: 3
+num_targets: 6
+num_states: 4
 
 target_names:
+  - Non-vegetated ground
+  - Trees
+  - Low vegetation
+  - Water
   - Building
+  - Playground
 
 state_names:
   - NoChange
-  - Reduced
-  - Added
+  - Disappeared
+  - Appeared
+  - Transitioned
 
 clip_text_prompts:
-  - "building, structure, house"
-
-target_valid_states:
-  0: [0, 1, 2]
-
-train_id_map:
-  1: [0, 0]   # building_nochange
-  2: [0, 1]   # building_reduced (pre has, post doesn't)
-  3: [0, 2]   # building_added (post has, pre doesn't)
+  - "bare soil, exposed ground, non-vegetated surface"
+  - "trees, forest, woodland canopy"
+  - "low vegetation, grass, shrub, crop field"
+  - "water body, river, lake, pond"
+  - "building, structure, house, roof"
+  - "playground, sports field, court, track"
 
 state_clip_prompts:
-  - "unchanged building, no change"
-  - "destroyed removed building"
-  - "newly constructed building"
+  - "unchanged, no change, same as before"
+  - "disappeared, removed, destroyed, gone"
+  - "newly appeared, constructed, added"
+  - "transitioned, changed type, converted"
 
-# V5: 分支路由 - Building 同时走实例和语义分支
+target_valid_states:
+  0: [0, 1, 2, 3]
+  1: [0, 1, 2, 3]
+  2: [0, 1, 2, 3]
+  3: [0, 1, 2, 3]
+  4: [0, 1, 2, 3]
+  5: [0, 1, 2, 3]
+
+# train_id = class_id * 4 + state_id
+# class_id: 1=Non-veg, 2=Trees, 3=Low veg, 4=Water, 5=Building, 6=Playground
+# state_id: 0=NoChange, 1=Disappeared, 2=Appeared, 3=Transitioned
+train_id_map:
+  4: [0, 0]
+  5: [0, 1]
+  6: [0, 2]
+  7: [0, 3]
+  8: [1, 0]
+  9: [1, 1]
+  10: [1, 2]
+  11: [1, 3]
+  12: [2, 0]
+  13: [2, 1]
+  14: [2, 2]
+  15: [2, 3]
+  16: [3, 0]
+  17: [3, 1]
+  18: [3, 2]
+  19: [3, 3]
+  20: [4, 0]
+  21: [4, 1]
+  22: [4, 2]
+  23: [4, 3]
+  24: [5, 0]
+  25: [5, 1]
+  26: [5, 2]
+  27: [5, 3]
+
 branch_routing:
+  Non-vegetated ground: semantic
+  Trees: semantic
+  Low vegetation: semantic
+  Water: semantic
   Building: instance
+  Playground: instance
 
-# V5: 分支配置
 branch_config:
   instance:
     num_queries_per_scale: 17
@@ -40,3 +84,4 @@ branch_config:
   semantic:
     fpn_channels: 128
     output_stride: 4
+

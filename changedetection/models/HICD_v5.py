@@ -79,7 +79,6 @@ class HICD_v5(nn.Module):
         self.instance_head = HierarchicalInstanceHead(
             visual_dim=128,
             num_queries_per_scale=num_queries_per_scale,
-            dataset_config=dataset_config,
             num_targets=num_targets,
             num_states=num_states,
             num_decoder_layers=6,

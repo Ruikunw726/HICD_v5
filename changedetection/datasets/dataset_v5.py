@@ -104,13 +104,13 @@ class ChangeDetectionDatasetV5(Dataset):
 
         # 读取影像
         if self.flat_structure:
-            pre_path = os.path.join(self.dataset_path, split, "image", img_stem + "_pre_war.tif")
-            post_path = os.path.join(self.dataset_path, split, "image", img_stem + "_post_war.tif")
-            label_path = os.path.join(self.dataset_path, split, "label", img_stem + "_target.tif")
+            pre_path = os.path.join(self.dataset_path, "image", fname)
+            post_path = os.path.join(self.dataset_path, "image", fname.replace("_pre_war", "_post_war"))
+            label_path = os.path.join(self.dataset_path, "label", fname.replace("_pre_war", "_target"))
         else:
-            pre_path = os.path.join(self.dataset_path, split, "image", "pre", stem + ".tif")
-            post_path = os.path.join(self.dataset_path, split, "image", "post", stem + ".tif")
-            label_path = os.path.join(self.dataset_path, split, "label", img_stem + "_target.tif")
+            pre_path = os.path.join(self.dataset_path, "image", "pre", stem + ".tif")
+            post_path = os.path.join(self.dataset_path, "image", "post", stem + ".tif")
+            label_path = os.path.join(self.dataset_path, "label", fname.replace("_pre_war", "_target"))
 
         pre_img = read_tif(pre_path)
         post_img = read_tif(post_path)

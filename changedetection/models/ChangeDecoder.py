@@ -1,28 +1,7 @@
 ﻿import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from HICD.classification.models.vmamba import VSSM, LayerNorm2d, VSSBlock, Permute
-
-
-class SparseChangeGate(nn.Module):
-    """V4.2: Sparse change gate inspired by SNN time-to-first-spike encoding.
-    
-    Filters dense feature differences (pre - post) through a learnable soft
-    threshold so that only pixels with significant changes pass into the
-    SD-SSM branch.  Noise (illumination, registration, seasonal) is suppressed.
-    
-    Equivalent to soft thresholding in compressed sensing / wavelet denoising.
-    """
-    def __init__(self, channels):
-        super().__init__()
-        # learnable per-channel threshold (initialized to 0 → gate ≈ 0.5 at start)
-        self.threshold = nn.Parameter(torch.zeros(1, channels, 1, 1))
-
-    def forward(self, diff):
-        # |diff| > threshold → gate ≈ 1 (keep); |diff| < threshold → gate ≈ 0 (suppress)
-        gate = torch.sigmoid(diff.abs() - self.threshold.abs())
-        return diff * gate
-
+from HICD_v5.classification.models.vmamba import VSSM, LayerNorm2d, VSSBlock, Permute
 
 
 class ChangeDecoder(nn.Module):
@@ -52,19 +31,6 @@ class ChangeDecoder(nn.Module):
 
         )
         self.st_block_43 = nn.Sequential(
-            nn.Conv2d(kernel_size=1, in_channels=encoder_dims[-1], out_channels=128),
-            Permute(0, 2, 3, 1) if not channel_first else nn.Identity(),
-            VSSBlock(hidden_dim=128, drop_path=0.1, norm_layer=norm_layer, channel_first=channel_first,
-                ssm_d_state=kwargs['ssm_d_state'], ssm_ratio=kwargs['ssm_ratio'], ssm_dt_rank=kwargs['ssm_dt_rank'], ssm_act_layer=ssm_act_layer,
-                ssm_conv=kwargs['ssm_conv'], ssm_conv_bias=kwargs['ssm_conv_bias'], ssm_drop_rate=kwargs['ssm_drop_rate'], ssm_init=kwargs['ssm_init'],
-                forward_type=kwargs['forward_type'], mlp_ratio=kwargs['mlp_ratio'], mlp_act_layer=mlp_act_layer, mlp_drop_rate=kwargs['mlp_drop_rate'],
-                gmlp=kwargs['gmlp'], use_checkpoint=kwargs['use_checkpoint']),
-            Permute(0, 3, 1, 2) if not channel_first else nn.Identity(),
-        )
-
-        # V4: Spatial Difference-aware SSM (SD-SSM) branch
-        # explicitly feed pre - post difference into SSM
-        self.st_block_44 = nn.Sequential(
             nn.Conv2d(kernel_size=1, in_channels=encoder_dims[-1], out_channels=128),
             Permute(0, 2, 3, 1) if not channel_first else nn.Identity(),
             VSSBlock(hidden_dim=128, drop_path=0.1, norm_layer=norm_layer, channel_first=channel_first,
@@ -106,18 +72,6 @@ class ChangeDecoder(nn.Module):
             Permute(0, 3, 1, 2) if not channel_first else nn.Identity(),
         )
 
-        # V4: SD-SSM branch for stage 3
-        self.st_block_34 = nn.Sequential(
-            nn.Conv2d(kernel_size=1, in_channels=encoder_dims[-2], out_channels=128),
-            Permute(0, 2, 3, 1) if not channel_first else nn.Identity(),
-            VSSBlock(hidden_dim=128, drop_path=0.1, norm_layer=norm_layer, channel_first=channel_first,
-                ssm_d_state=kwargs['ssm_d_state'], ssm_ratio=kwargs['ssm_ratio'], ssm_dt_rank=kwargs['ssm_dt_rank'], ssm_act_layer=ssm_act_layer,
-                ssm_conv=kwargs['ssm_conv'], ssm_conv_bias=kwargs['ssm_conv_bias'], ssm_drop_rate=kwargs['ssm_drop_rate'], ssm_init=kwargs['ssm_init'],
-                forward_type=kwargs['forward_type'], mlp_ratio=kwargs['mlp_ratio'], mlp_act_layer=mlp_act_layer, mlp_drop_rate=kwargs['mlp_drop_rate'],
-                gmlp=kwargs['gmlp'], use_checkpoint=kwargs['use_checkpoint']),
-            Permute(0, 3, 1, 2) if not channel_first else nn.Identity(),
-        )
-
         self.st_block_21 = nn.Sequential(
             nn.Conv2d(kernel_size=1, in_channels=encoder_dims[-3] * 2, out_channels=128),
             Permute(0, 2, 3, 1) if not channel_first else nn.Identity(),
@@ -139,18 +93,6 @@ class ChangeDecoder(nn.Module):
             Permute(0, 3, 1, 2) if not channel_first else nn.Identity(),
         )
         self.st_block_23 = nn.Sequential(
-            nn.Conv2d(kernel_size=1, in_channels=encoder_dims[-3], out_channels=128),
-            Permute(0, 2, 3, 1) if not channel_first else nn.Identity(),
-            VSSBlock(hidden_dim=128, drop_path=0.1, norm_layer=norm_layer, channel_first=channel_first,
-                ssm_d_state=kwargs['ssm_d_state'], ssm_ratio=kwargs['ssm_ratio'], ssm_dt_rank=kwargs['ssm_dt_rank'], ssm_act_layer=ssm_act_layer,
-                ssm_conv=kwargs['ssm_conv'], ssm_conv_bias=kwargs['ssm_conv_bias'], ssm_drop_rate=kwargs['ssm_drop_rate'], ssm_init=kwargs['ssm_init'],
-                forward_type=kwargs['forward_type'], mlp_ratio=kwargs['mlp_ratio'], mlp_act_layer=mlp_act_layer, mlp_drop_rate=kwargs['mlp_drop_rate'],
-                gmlp=kwargs['gmlp'], use_checkpoint=kwargs['use_checkpoint']),
-            Permute(0, 3, 1, 2) if not channel_first else nn.Identity(),
-        )
-
-        # V4: SD-SSM branch for stage 2
-        self.st_block_24 = nn.Sequential(
             nn.Conv2d(kernel_size=1, in_channels=encoder_dims[-3], out_channels=128),
             Permute(0, 2, 3, 1) if not channel_first else nn.Identity(),
             VSSBlock(hidden_dim=128, drop_path=0.1, norm_layer=norm_layer, channel_first=channel_first,
@@ -192,60 +134,14 @@ class ChangeDecoder(nn.Module):
             Permute(0, 3, 1, 2) if not channel_first else nn.Identity(),
         )
 
-        # V4: SD-SSM branch for stage 1
-        self.st_block_14 = nn.Sequential(
-            nn.Conv2d(kernel_size=1, in_channels=encoder_dims[-4], out_channels=128),
-            Permute(0, 2, 3, 1) if not channel_first else nn.Identity(),
-            VSSBlock(hidden_dim=128, drop_path=0.1, norm_layer=norm_layer, channel_first=channel_first,
-                ssm_d_state=kwargs['ssm_d_state'], ssm_ratio=kwargs['ssm_ratio'], ssm_dt_rank=kwargs['ssm_dt_rank'], ssm_act_layer=ssm_act_layer,
-                ssm_conv=kwargs['ssm_conv'], ssm_conv_bias=kwargs['ssm_conv_bias'], ssm_drop_rate=kwargs['ssm_drop_rate'], ssm_init=kwargs['ssm_init'],
-                forward_type=kwargs['forward_type'], mlp_ratio=kwargs['mlp_ratio'], mlp_act_layer=mlp_act_layer, mlp_drop_rate=kwargs['mlp_drop_rate'],
-                gmlp=kwargs['gmlp'], use_checkpoint=kwargs['use_checkpoint']),
-            Permute(0, 3, 1, 2) if not channel_first else nn.Identity(),
-        )
-
-        # V4: Context-SSM modules (multi-scale CNN local context injection)
-        # Inspired by Mamba-MOC's Context-SSM: inject local spatial context
-        # that SSM loses when flattening 2D -> 1D sequences
-        self.context_ssm_4 = nn.Sequential(
-            nn.Conv2d(128, 128, kernel_size=3, padding=1, groups=128, bias=False),
-            nn.Conv2d(128, 128, kernel_size=1, bias=False),
-            nn.BatchNorm2d(128),
-            nn.ReLU(inplace=True),
-        )
-        self.context_ssm_3 = nn.Sequential(
-            nn.Conv2d(128, 128, kernel_size=3, padding=1, groups=128, bias=False),
-            nn.Conv2d(128, 128, kernel_size=1, bias=False),
-            nn.BatchNorm2d(128),
-            nn.ReLU(inplace=True),
-        )
-        self.context_ssm_2 = nn.Sequential(
-            nn.Conv2d(128, 128, kernel_size=3, padding=1, groups=128, bias=False),
-            nn.Conv2d(128, 128, kernel_size=1, bias=False),
-            nn.BatchNorm2d(128),
-            nn.ReLU(inplace=True),
-        )
-        self.context_ssm_1 = nn.Sequential(
-            nn.Conv2d(128, 128, kernel_size=3, padding=1, groups=128, bias=False),
-            nn.Conv2d(128, 128, kernel_size=1, bias=False),
-            nn.BatchNorm2d(128),
-            nn.ReLU(inplace=True),
-        )
-
-        # V4.2: Sparse change gates for SD-SSM branches (one per stage)
-        self.sparse_gate_4 = SparseChangeGate(encoder_dims[-1])
-        self.sparse_gate_3 = SparseChangeGate(encoder_dims[-2])
-        self.sparse_gate_2 = SparseChangeGate(encoder_dims[-3])
-        self.sparse_gate_1 = SparseChangeGate(encoder_dims[-4])
-
         # Fuse layer  
-        self.fuse_layer_4 = nn.Sequential(nn.Conv2d(kernel_size=1, in_channels=128 * 6, out_channels=128),
+        self.fuse_layer_4 = nn.Sequential(nn.Conv2d(kernel_size=1, in_channels=128 * 5, out_channels=128),
                                           nn.BatchNorm2d(128), nn.ReLU())
-        self.fuse_layer_3 = nn.Sequential(nn.Conv2d(kernel_size=1, in_channels=128 * 6, out_channels=128),
+        self.fuse_layer_3 = nn.Sequential(nn.Conv2d(kernel_size=1, in_channels=128 * 5, out_channels=128),
                                           nn.BatchNorm2d(128), nn.ReLU())
-        self.fuse_layer_2 = nn.Sequential(nn.Conv2d(kernel_size=1, in_channels=128 * 6, out_channels=128),
+        self.fuse_layer_2 = nn.Sequential(nn.Conv2d(kernel_size=1, in_channels=128 * 5, out_channels=128),
                                           nn.BatchNorm2d(128), nn.ReLU())
-        self.fuse_layer_1 = nn.Sequential(nn.Conv2d(kernel_size=1, in_channels=128 * 6, out_channels=128),
+        self.fuse_layer_1 = nn.Sequential(nn.Conv2d(kernel_size=1, in_channels=128 * 5, out_channels=128),
                                           nn.BatchNorm2d(128), nn.ReLU())
 
         # Smooth layer
@@ -280,12 +176,7 @@ class ChangeDecoder(nn.Module):
         ct_tensor_43[:, :, :, W:] = post_feat_4
         p43 = self.st_block_43(ct_tensor_43)
 
-        # V4.2: Sparse change gate filters noise before SD-SSM
-        p44 = self.st_block_44(self.sparse_gate_4(pre_feat_4 - post_feat_4))
-
-        p4 = self.fuse_layer_4(torch.cat([p41, p42[:, :, :, ::2], p42[:, :, :, 1::2], p43[:, :, :, 0:W], p43[:, :, :, W:], p44], dim=1))
-        # V4: inject local context (Context-SSM)
-        p4 = p4 + self.context_ssm_4(p4)
+        p4 = self.fuse_layer_4(torch.cat([p41, p42[:, :, :, ::2], p42[:, :, :, 1::2], p43[:, :, :, 0:W], p43[:, :, :, W:]], dim=1))
        
 
         '''
@@ -305,11 +196,7 @@ class ChangeDecoder(nn.Module):
         ct_tensor_33[:, :, :, W:] = post_feat_3
         p33 = self.st_block_33(ct_tensor_33)
 
-        # V4.2: Sparse change gate
-        p34 = self.st_block_34(self.sparse_gate_3(pre_feat_3 - post_feat_3))
-
-        p3 = self.fuse_layer_3(torch.cat([p31, p32[:, :, :, ::2], p32[:, :, :, 1::2], p33[:, :, :, 0:W], p33[:, :, :, W:], p34], dim=1))
-        p3 = p3 + self.context_ssm_3(p3)
+        p3 = self.fuse_layer_3(torch.cat([p31, p32[:, :, :, ::2], p32[:, :, :, 1::2], p33[:, :, :, 0:W], p33[:, :, :, W:]], dim=1))
         p3 = self._upsample_add(p4, p3)
         p3 = self.smooth_layer_3(p3)
        
@@ -330,11 +217,7 @@ class ChangeDecoder(nn.Module):
         ct_tensor_23[:, :, :, W:] = post_feat_2
         p23 = self.st_block_23(ct_tensor_23)
 
-        # V4.2: Sparse change gate
-        p24 = self.st_block_24(self.sparse_gate_2(pre_feat_2 - post_feat_2))
-
-        p2 = self.fuse_layer_2(torch.cat([p21, p22[:, :, :, ::2], p22[:, :, :, 1::2], p23[:, :, :, 0:W], p23[:, :, :, W:], p24], dim=1))
-        p2 = p2 + self.context_ssm_2(p2)
+        p2 = self.fuse_layer_2(torch.cat([p21, p22[:, :, :, ::2], p22[:, :, :, 1::2], p23[:, :, :, 0:W], p23[:, :, :, W:]], dim=1))
         p2 = self._upsample_add(p3, p2)
         p2 = self.smooth_layer_2(p2)
        
@@ -355,11 +238,7 @@ class ChangeDecoder(nn.Module):
         ct_tensor_13[:, :, :, W:] = post_feat_1
         p13 = self.st_block_13(ct_tensor_13)
 
-        # V4.2: Sparse change gate
-        p14 = self.st_block_14(self.sparse_gate_1(pre_feat_1 - post_feat_1))
-
-        p1 = self.fuse_layer_1(torch.cat([p11, p12[:, :, :, ::2], p12[:, :, :, 1::2], p13[:, :, :, 0:W], p13[:, :, :, W:], p14], dim=1))
-        p1 = p1 + self.context_ssm_1(p1)
+        p1 = self.fuse_layer_1(torch.cat([p11, p12[:, :, :, ::2], p12[:, :, :, 1::2], p13[:, :, :, 0:W], p13[:, :, :, W:]], dim=1))
 
         p1 = self._upsample_add(p2, p1)
         p1 = self.smooth_layer_1(p1)
@@ -394,4 +273,3 @@ class ResBlock(nn.Module):
         out = self.relu(out)
 
         return out
-

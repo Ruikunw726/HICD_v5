@@ -63,6 +63,20 @@ def get_valid_state_mask():
     mask[9, 0] = 1
     return mask
 
+# === 兼容性常量（供 HierarchicalInstanceHead 等模块直接导入）===
+TARGET_VALID_STATES = {
+    0: [0, 1],       # Farmland: NoChange, Damaged
+    1: [0, 1, 2, 3, 4],  # Runway
+    2: [0, 1, 2, 3, 4],  # Taxiway
+    3: [0, 1, 2, 3, 4],  # Apron
+    4: [0, 1, 2, 3, 4],  # Highway
+    5: [0, 1, 2, 3, 4],  # Building
+    6: [0, 1, 2, 3],     # Tank
+    7: [0, 1, 2, 3, 5],  # Aircraft
+    8: [0, 1, 2, 3, 5],  # Vessel
+    9: [0],              # Crater: NoChange only
+}
+
 
 class DatasetConfig:
     """数据集配置，从 YAML 文件加载。"""
