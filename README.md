@@ -1,45 +1,45 @@
-# HICD V5 ¡ª Dual-Branch Change Detection
+# HICD V5 ï¿½ï¿½ Dual-Branch Change Detection
 
-»ùÓÚ Mamba (VSSM) + CLIP ÎÄ±¾Òýµ¼µÄ**Ë«·ÖÖ§**Ò£¸Ð±ä»¯¼ì²â¿ò¼Ü¡£
+ï¿½ï¿½ï¿½ï¿½ Mamba (VSSM) + CLIP ï¿½Ä±ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½**Ë«ï¿½ï¿½Ö§**Ò£ï¿½Ð±ä»¯ï¿½ï¿½ï¿½ï¿½Ü¡ï¿½
 
-## ºËÐÄ´´ÐÂ
+## ï¿½ï¿½ï¿½Ä´ï¿½ï¿½ï¿½
 
-ÔÚ V4 ÊµÀý¼¶¼ì²âµÄ»ù´¡ÉÏ£¬ÐÂÔöÓïÒå·Ö¸î·ÖÖ§£¬½â¾ö´ó·¶Î§Ä¿±ê£¨ÅÜµÀ¡¢Í£»úÆº£©¾Ö²¿Ëð»µÎÞ·¨¾«È·¶¨Î»µÄÎÊÌâ¡£
+ï¿½ï¿½ V4 Êµï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä»ï¿½ï¿½ï¿½ï¿½Ï£ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö¸ï¿½ï¿½Ö§ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Î§Ä¿ï¿½ê£¨ï¿½Üµï¿½ï¿½ï¿½Í£ï¿½ï¿½Æºï¿½ï¿½ï¿½Ö²ï¿½ï¿½ï¿½ï¿½Þ·ï¿½ï¿½ï¿½È·ï¿½ï¿½Î»ï¿½ï¿½ï¿½ï¿½ï¿½â¡£
 
-| ´´ÐÂ | ËµÃ÷ |
+| ï¿½ï¿½ï¿½ï¿½ | Ëµï¿½ï¿½ |
 |------|------|
-| Ë«·ÖÖ§½âÂëÆ÷ | ÊµÀý¼ì²â£¨Ð¡Ä¿±ê£©+ ÓïÒå·Ö¸î£¨´ó/ÏßÐÔÄ¿±ê£©²¢ÐÐ |
-| Task-Specific Adapters | ÇáÁ¿ÊÊÅä²ã£¨~100K ²ÎÊý£©£¬±ÜÃâÌÝ¶È³åÍ» |
-| DatasetConfig ·ÖÖ§Â·ÓÉ | YAML ÅäÖÃÖ¸¶¨Ã¿¸öÀà±ð×ßÄÄ¸ö·ÖÖ§ |
-| Masked Dual-Branch Loss | ÊµÀýËðÊ§ + Masked CE + Masked Dice£¨Ö»ÔÚÓïÒåÄ¿±êÇøÓò¼ÆËã£¬±³¾°²»»Ø´«ÌÝ¶È£© |
-| SD-SSM + SparseChangeGate | V4 ¼Ì³Ð£ºÏÔÊ½½¨Ä£Ë«Ê±Ïà²îÖµ + Ï¡ÊèÃÅ¿Ø |
-| CLIP ÎÄ±¾Òýµ¼ | Á½½×¶ÎÑµÁ·£º¶³½á¡ú½â¶³ |
+| Ë«ï¿½ï¿½Ö§ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ | Êµï¿½ï¿½ï¿½ï¿½â£¨Ð¡Ä¿ï¿½ê£©+ ï¿½ï¿½ï¿½ï¿½Ö¸î£¨ï¿½ï¿½/ï¿½ï¿½ï¿½ï¿½Ä¿ï¿½ê£©ï¿½ï¿½ï¿½ï¿½ |
+| Task-Specific Adapters | ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ã£¨~100K ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ý¶È³ï¿½Í» |
+| DatasetConfig ï¿½ï¿½Ö§Â·ï¿½ï¿½ | YAML ï¿½ï¿½ï¿½ï¿½Ö¸ï¿½ï¿½Ã¿ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä¸ï¿½ï¿½ï¿½Ö§ |
+| Masked Dual-Branch Loss | Êµï¿½ï¿½ï¿½ï¿½Ê§ + Masked CE + Masked Diceï¿½ï¿½Ö»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä¿ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ã£¬ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ø´ï¿½ï¿½Ý¶È£ï¿½ |
+| SD-SSM + SparseChangeGate | V4 ï¿½Ì³Ð£ï¿½ï¿½ï¿½Ê½ï¿½ï¿½Ä£Ë«Ê±ï¿½ï¿½ï¿½Öµ + Ï¡ï¿½ï¿½ï¿½Å¿ï¿½ |
+| CLIP ï¿½Ä±ï¿½ï¿½ï¿½ï¿½ï¿½ | ï¿½ï¿½ï¿½×¶ï¿½Ñµï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½â¶³ |
 
-## ·ÖÖ§Â·ÓÉ
+## ï¿½ï¿½Ö§Â·ï¿½ï¿½
 
-| ·ÖÖ§ | ¸ºÔðÀà±ð | Êä³ö¸ñÊ½ |
+| ï¿½ï¿½Ö§ | ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ | ï¿½ï¿½ï¿½ï¿½ï¿½Ê½ |
 |------|---------|---------|
-| ÊµÀý¼ì²â | Building, Aircraft, Tank, Vessel, Crater, Playground | bbox + target + state |
-| ÓïÒå·Ö¸î | Runway, Taxiway, Apron, Highway, Farmland, Non-veg ground, Trees, Low veg, Water | ÏñËØ¼¶ target_map + state_map |
+| Êµï¿½ï¿½ï¿½ï¿½ï¿½ | Building, Aircraft, Tank, Vessel, Crater, Playground | bbox + target + state |
+| ï¿½ï¿½ï¿½ï¿½Ö¸ï¿½ | Runway, Taxiway, Apron, Highway, Farmland, Non-veg ground, Trees, Low veg, Water | ï¿½ï¿½ï¿½Ø¼ï¿½ target_map + state_map |
 
-¾ßÌåÀà±ðÂ·ÓÉÍ¨¹ý YAML ÅäÖÃÎÄ¼þ°´Êý¾Ý¼¯Ö¸¶¨£¬Ä£ÐÍ²»Ð´ËÀÀà±ðÊý¡£
+ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Â·ï¿½ï¿½Í¨ï¿½ï¿½ YAML ï¿½ï¿½ï¿½ï¿½ï¿½Ä¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ý¼ï¿½Ö¸ï¿½ï¿½ï¿½ï¿½Ä£ï¿½Í²ï¿½Ð´ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 
-## Ö§³ÖµÄÊý¾Ý¼¯
+## Ö§ï¿½Öµï¿½ï¿½ï¿½ï¿½Ý¼ï¿½
 
-| Êý¾Ý¼¯ | Àà±ðÊý | ×´Ì¬Êý | ÊµÀý·ÖÖ§ | ÓïÒå·ÖÖ§ |
+| ï¿½ï¿½ï¿½Ý¼ï¿½ | ï¿½ï¿½ï¿½ï¿½ï¿½ | ×´Ì¬ï¿½ï¿½ | Êµï¿½ï¿½ï¿½ï¿½Ö§ | ï¿½ï¿½ï¿½ï¿½ï¿½Ö§ |
 |--------|--------|--------|----------|----------|
 | 0617final | 10 | 6 | Building, Aircraft, Tank, Vessel, Crater | Runway, Taxiway, Apron, Highway, Farmland |
 | SECOND | 6 | 4 | Building, Playground | Non-veg ground, Trees, Low veg, Water |
-| xbd | - | - | ´ýÅäÖÃ | ´ýÅäÖÃ |
+| xbd | - | - | ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ | ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ |
 
-## ¿ìËÙ¿ªÊ¼
+## ï¿½ï¿½ï¿½Ù¿ï¿½Ê¼
 
 ```bash
 cd /mnt/f/mambacd/home
 export PYTHONPATH="/mnt/f/mambacd/home:$PYTHONPATH"
 source ~/miniconda/bin/activate && conda activate mamba
 
-# ÑµÁ· 0617final
+# Ñµï¿½ï¿½ 0617final
 python HICD_v5/changedetection/script/train_full_v5.py \
     --dataset 0617final \
     --data_dir HICD/0617final \
@@ -49,8 +49,8 @@ python HICD_v5/changedetection/script/train_full_v5.py \
     --clip_mode target --clip_unfreeze_epoch 20 \
     --use_amp --exp_name v5_0617final
 
-# ÑµÁ· SECOND£¨ÐèÒªÏÈ×ª»»Êý¾Ý¼¯£©
-python HICD_v5/changedetection/datasets/convert_second_v5.py  # Éú³É SECOND_hicd_v5/
+# Ñµï¿½ï¿½ SECONDï¿½ï¿½ï¿½ï¿½Òªï¿½ï¿½×ªï¿½ï¿½ï¿½ï¿½ï¿½Ý¼ï¿½ï¿½ï¿½
+python HICD_v5/changedetection/datasets/convert_second_v5.py  # ï¿½ï¿½ï¿½ï¿½ SECOND_hicd_v5/
 python HICD_v5/changedetection/script/train_full_v5.py \
     --dataset second \
     --data_dir SECOND_hicd_v5 \
@@ -62,95 +62,105 @@ python HICD_v5/changedetection/script/train_full_v5.py \
     --use_amp --exp_name v5_second
 ```
 
-## ÏîÄ¿½á¹¹
+## ï¿½ï¿½Ä¿ï¿½á¹¹
 
 ```
 HICD_v5/
-©À©¤©¤ changedetection/
-©¦   ©À©¤©¤ configs/
-©¦   ©¦   ©À©¤©¤ config.py
-©¦   ©¦   ©¸©¤©¤ datasets/
-©¦   ©¦       ©À©¤©¤ 0617final.yaml    # 10Àà, 6×´Ì¬
-©¦   ©¦       ©À©¤©¤ second.yaml       # 6Àà, 4×´Ì¬
-©¦   ©¦       ©¸©¤©¤ xbd.yaml
-©¦   ©À©¤©¤ datasets/
-©¦   ©¦   ©À©¤©¤ dataset_v5.py         # Ë«·ÖÖ§Êý¾Ý¼¯
-©¦   ©¦   ©À©¤©¤ convert_second_v5.py  # SECOND Êý¾Ý¼¯×ª»»
-©¦   ©¦   ©¸©¤©¤ imutils.py
-©¦   ©À©¤©¤ models/
-©¦   ©¦   ©À©¤©¤ HICD_v5.py            # Ö÷Ä£ÐÍ£¨Ë«·ÖÖ§£©
-©¦   ©¦   ©À©¤©¤ TaskAdapter.py        # ÈÎÎñÌØ¶¨ÊÊÅäÆ÷
-©¦   ©¦   ©À©¤©¤ SemanticSegmentationHead.py  # ÓïÒå·Ö¸îÍ·
-©¦   ©¦   ©À©¤©¤ DualBranchLoss.py     # Ë«·ÖÖ§ÁªºÏËðÊ§£¨Masked CE + Masked Dice£©
-©¦   ©¦   ©À©¤©¤ HierarchicalInstanceHead.py  # ÊµÀý¼ì²âÍ·£¨ÑØÓÃ V4£©
-©¦   ©¦   ©À©¤©¤ HierarchicalInstanceLoss.py  # ÊµÀýËðÊ§£¨ÑØÓÃ V4£©
-©¦   ©¦   ©À©¤©¤ ChangeDecoder.py      # SD-SSM + SparseChangeGate
-©¦   ©¦   ©À©¤©¤ CLIPTextEncoder.py
-©¦   ©¦   ©À©¤©¤ CrossAttentionFusion.py
-©¦   ©¦   ©À©¤©¤ Mamba_backbone.py
-©¦   ©¦   ©¸©¤©¤ class_mapping.py      # DatasetConfig + ·ÖÖ§Â·ÓÉ + train_id_map
-©¦   ©¸©¤©¤ script/
-©¦       ©À©¤©¤ train_full_v5.py      # V5 ÑµÁ·½Å±¾
-©¦       ©¸©¤©¤ metrics.py
-©¸©¤©¤ README.md
+ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ changedetection/
+ï¿½ï¿½   ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ configs/
+ï¿½ï¿½   ï¿½ï¿½   ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ config.py
+ï¿½ï¿½   ï¿½ï¿½   ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ datasets/
+ï¿½ï¿½   ï¿½ï¿½       ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ 0617final.yaml    # 10ï¿½ï¿½, 6×´Ì¬
+ï¿½ï¿½   ï¿½ï¿½       ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ second.yaml       # 6ï¿½ï¿½, 4×´Ì¬
+ï¿½ï¿½   ï¿½ï¿½       ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ xbd.yaml
+ï¿½ï¿½   ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ datasets/
+ï¿½ï¿½   ï¿½ï¿½   ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ dataset_v5.py         # Ë«ï¿½ï¿½Ö§ï¿½ï¿½ï¿½Ý¼ï¿½
+ï¿½ï¿½   ï¿½ï¿½   ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ convert_second_v5.py  # SECOND ï¿½ï¿½ï¿½Ý¼ï¿½×ªï¿½ï¿½
+ï¿½ï¿½   ï¿½ï¿½   ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ imutils.py
+ï¿½ï¿½   ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ models/
+ï¿½ï¿½   ï¿½ï¿½   ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ HICD_v5.py            # ï¿½ï¿½Ä£ï¿½Í£ï¿½Ë«ï¿½ï¿½Ö§ï¿½ï¿½
+ï¿½ï¿½   ï¿½ï¿½   ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ TaskAdapter.py        # ï¿½ï¿½ï¿½ï¿½ï¿½Ø¶ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+ï¿½ï¿½   ï¿½ï¿½   ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ SemanticSegmentationHead.py  # ï¿½ï¿½ï¿½ï¿½Ö¸ï¿½Í·
+ï¿½ï¿½   ï¿½ï¿½   ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ DualBranchLoss.py     # Ë«ï¿½ï¿½Ö§ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê§ï¿½ï¿½Masked CE + Masked Diceï¿½ï¿½
+ï¿½ï¿½   ï¿½ï¿½   ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ HierarchicalInstanceHead.py  # Êµï¿½ï¿½ï¿½ï¿½ï¿½Í·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ V4ï¿½ï¿½
+ï¿½ï¿½   ï¿½ï¿½   ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ HierarchicalInstanceLoss.py  # Êµï¿½ï¿½ï¿½ï¿½Ê§ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ V4ï¿½ï¿½
+ï¿½ï¿½   ï¿½ï¿½   ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ChangeDecoder.py      # SD-SSM + SparseChangeGate
+ï¿½ï¿½   ï¿½ï¿½   ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ CLIPTextEncoder.py
+ï¿½ï¿½   ï¿½ï¿½   ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ CrossAttentionFusion.py
+ï¿½ï¿½   ï¿½ï¿½   ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ Mamba_backbone.py
+ï¿½ï¿½   ï¿½ï¿½   ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ class_mapping.py      # DatasetConfig + ï¿½ï¿½Ö§Â·ï¿½ï¿½ + train_id_map
+ï¿½ï¿½   ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ script/
+ï¿½ï¿½       ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ train_full_v5.py      # V5 Ñµï¿½ï¿½ï¿½Å±ï¿½
+ï¿½ï¿½       ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ metrics.py
+ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ README.md
 ```
 
-## Êµ¼ÊÏñËØ·Ö²¼ÓëËðÊ§Éè¼Æ
+## Êµï¿½ï¿½ï¿½ï¿½ï¿½Ø·Ö²ï¿½ï¿½ï¿½ï¿½ï¿½Ê§ï¿½ï¿½ï¿½
 
-**0617final Airports£º**
+**0617final Airportsï¿½ï¿½**
 
-| Àà±ð | ÏñËØÕ¼±È | ·ÖÖ§ |
+| ï¿½ï¿½ï¿½ | ï¿½ï¿½ï¿½ï¿½Õ¼ï¿½ï¿½ | ï¿½ï¿½Ö§ |
 |------|---------|------|
-| Background | 56.98% | ¡ª |
-| Taxiway | 20.81% | ÓïÒå |
-| Runway | 15.73% | ÓïÒå |
-| Apron | 3.98% | ÓïÒå |
-| Building | 2.00% | ÊµÀý |
-| Farmland | 0.36% | ÓïÒå |
-| Highway | 0.09% | ÓïÒå |
-| Crater | 0.03% | ÊµÀý |
-| Aircraft | 0.02% | ÊµÀý |
+| Background | 56.98% | ï¿½ï¿½ |
+| Taxiway | 20.81% | ï¿½ï¿½ï¿½ï¿½ |
+| Runway | 15.73% | ï¿½ï¿½ï¿½ï¿½ |
+| Apron | 3.98% | ï¿½ï¿½ï¿½ï¿½ |
+| Building | 2.00% | Êµï¿½ï¿½ |
+| Farmland | 0.36% | ï¿½ï¿½ï¿½ï¿½ |
+| Highway | 0.09% | ï¿½ï¿½ï¿½ï¿½ |
+| Crater | 0.03% | Êµï¿½ï¿½ |
+| Aircraft | 0.02% | Êµï¿½ï¿½ |
 
-**SECOND£º**
+**SECONDï¿½ï¿½**
 
-| Àà±ð | ×´Ì¬ | ·ÖÖ§ |
+| ï¿½ï¿½ï¿½ | ×´Ì¬ | ï¿½ï¿½Ö§ |
 |------|------|------|
-| Building | Disappeared/Appeared | ÊµÀý (42,426 instances) |
-| Playground | Disappeared/Appeared | ÊµÀý (321 instances) |
-| Non-veg ground | ±ä»¯ | ÓïÒå |
-| Trees | ±ä»¯ | ÓïÒå |
-| Low vegetation | ±ä»¯ | ÓïÒå |
-| Water | ±ä»¯ | ÓïÒå |
+| Building | Disappeared/Appeared | Êµï¿½ï¿½ (42,426 instances) |
+| Playground | Disappeared/Appeared | Êµï¿½ï¿½ (321 instances) |
+| Non-veg ground | ï¿½ä»¯ | ï¿½ï¿½ï¿½ï¿½ |
+| Trees | ï¿½ä»¯ | ï¿½ï¿½ï¿½ï¿½ |
+| Low vegetation | ï¿½ä»¯ | ï¿½ï¿½ï¿½ï¿½ |
+| Water | ï¿½ä»¯ | ï¿½ï¿½ï¿½ï¿½ |
 
-**ËðÊ§Éè¼Æ**£º
-- **Masked Loss**£ºÅÅ³ý±³¾°£¬Ö»ÔÚÓïÒåÄ¿±êÇøÓò¼ÆËã CE + Dice
-- **GT ÏÂ²ÉÑù**£ºÓïÒå·ÖÖ§Êä³ö H/4 ·Ö±æÂÊ£¬GT ×Ô¶¯ÏÂ²ÉÑù¶ÔÆë
-- **Loss È¨ÖØ**£º`w_instance=3.0, w_semantic=1.0`
+**ï¿½ï¿½Ê§ï¿½ï¿½ï¿½**ï¿½ï¿½
+- **Masked Loss**ï¿½ï¿½ï¿½Å³ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä¿ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ CE + Dice
+- **GT ï¿½Â²ï¿½ï¿½ï¿½**ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö§ï¿½ï¿½ï¿½ H/4 ï¿½Ö±ï¿½ï¿½Ê£ï¿½GT ï¿½Ô¶ï¿½ï¿½Â²ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+- **Loss È¨ï¿½ï¿½**ï¿½ï¿½`w_instance=3.0, w_semantic=1.0`
 
-## °æ±¾ÀúÊ·
 
-| °æ±¾ | ÈÕÆÚ | Ö÷Òª¸Ä¶¯ |
+## ICD-Eval V5 ï¿½ï¿½ï¿½ï¿½Ð­ï¿½ï¿½
+
+Ë«ï¿½ï¿½Ö§ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö§Ö°ï¿½ï¿½
+
+**Êµï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ICD-Instanceï¿½ï¿½**ï¿½ï¿½bbox IoU Æ¥ï¿½ï¿½ ï¿½ï¿½ mAPï¿½ï¿½P/R/F1ï¿½ï¿½Target-Accï¿½ï¿½State-Acc
+**ï¿½ï¿½ï¿½Ø¼ï¿½ï¿½ï¿½ICD-Pixelï¿½ï¿½**ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ø·ï¿½ï¿½ï¿½ ï¿½ï¿½ mIoUï¿½ï¿½Pixel P/R/F1ï¿½ï¿½State-mIoU
+**ï¿½ï¿½ï¿½å£¨ICD-Overallï¿½ï¿½**ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö§ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½È¨Æ½ï¿½ï¿½
+
+ï¿½ï¿½Ï¸ï¿½ï¿½Æ¼ï¿½ changedetection/script/icd_eval_v5.pyï¿½ï¿½
+## ï¿½æ±¾ï¿½ï¿½Ê·
+
+| ï¿½æ±¾ | ï¿½ï¿½ï¿½ï¿½ | ï¿½ï¿½Òªï¿½Ä¶ï¿½ |
 |------|------|----------|
-| V1-V3 | 2026-07-28~30 | ¼û [HICD](https://github.com/Ruikunw726/HICD) |
+| V1-V3 | 2026-07-28~30 | ï¿½ï¿½ [HICD](https://github.com/Ruikunw726/HICD) |
 | V4 | 2026-07-30 | SD-SSM, Context-SSM, Pair-weighted Loss |
 | V4.2 | 2026-07-31 | SparseChangeGate |
-| V5 | 2026-08-03 | Ë«·ÖÖ§½âÂëÆ÷£ºÊµÀý¼ì²â + ÓïÒå·Ö¸î£¬Task Adapters£¬DatasetConfig Â·ÓÉ£¬Dual-Branch Loss |
-| V5.1 | 2026-08-03 | Masked Dual-Branch Loss + Êµ²âÏñËØ·Ö²¼·ÖÎö£ºÅÅ³ý±³¾°£¬w_instance=3.0 ²¹³¥ÊµÀý·ÖÖ§ |
-| V5.2 | 2026-08-03 | SECOND Êý¾Ý¼¯Ö§³Ö£º6 ÀàµØÎï + 4 ÖÖ±ä»¯×´Ì¬£¨NoChange/Disappeared/Appeared/Transitioned£©£¬RGB ±êÇ©¡útrain_id ±àÂë£¬ÊµÀý+ÓïÒåË«·ÖÖ§±êÇ©Éú³É |
+| V5 | 2026-08-03 | Ë«ï¿½ï¿½Ö§ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Êµï¿½ï¿½ï¿½ï¿½ï¿½ + ï¿½ï¿½ï¿½ï¿½Ö¸î£¬Task Adaptersï¿½ï¿½DatasetConfig Â·ï¿½É£ï¿½Dual-Branch Loss |
+| V5.1 | 2026-08-03 | Masked Dual-Branch Loss + Êµï¿½ï¿½ï¿½ï¿½ï¿½Ø·Ö²ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Å³ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½w_instance=3.0 ï¿½ï¿½ï¿½ï¿½Êµï¿½ï¿½ï¿½ï¿½Ö§ |
+| V5.2 | 2026-08-03 | SECOND ï¿½ï¿½ï¿½Ý¼ï¿½Ö§ï¿½Ö£ï¿½6 ï¿½ï¿½ï¿½ï¿½ï¿½ + 4 ï¿½Ö±ä»¯×´Ì¬ï¿½ï¿½NoChange/Disappeared/Appeared/Transitionedï¿½ï¿½ï¿½ï¿½RGB ï¿½ï¿½Ç©ï¿½ï¿½train_id ï¿½ï¿½ï¿½ë£¬Êµï¿½ï¿½+ï¿½ï¿½ï¿½ï¿½Ë«ï¿½ï¿½Ö§ï¿½ï¿½Ç©ï¿½ï¿½ï¿½ï¿½ |
 
-## ²È¿Ó¼ÇÂ¼
+## ï¿½È¿Ó¼ï¿½Â¼
 
-1. **µ¼ÈëÂ·¾¶**£ºV4 ´úÂëÖÐ²ÐÁô `from HICD.` / `from MambaCD.`£¬ÐèÈ«²¿¸ÄÎª `from HICD_v5.`
-2. **TARGET_VALID_STATES**£ºV5 class_mapping ÒÆÈë DatasetConfig£¬µ« HierarchicalInstanceHead ÈÔÖ±½Óµ¼Èë ¡ú Ìí¼Ó¼æÈÝÐÔ³£Á¿
-3. **Êý¾ÝÂ·¾¶Ë«ÖØÆ´½Ó**£º`scene_dir` ÒÑº¬ split Â·¾¶£¬dataset ²»Ó¦ÔÙÆ´ `split`
-4. **target_state_mask Î¬¶È**£ºÄ¬ÈÏ 10¡Á6£¬Ðè¸ù¾ÝÊµ¼Ê num_targets/num_states ¶¯Ì¬¹¹½¨
-5. **YAML ±àÂë**£ºPowerShell µÄ `Set-Content` »á¼Ó BOM »ò¸Ä GBK ¡ú ÓÃ Python Ð´ÎÄ¼þ»òÔÚ·þÎñÆ÷¶Ë `cat` Ð´Èë
-6. **Loss ·Ö±æÂÊ¶ÔÆë**£ºÓïÒåÍ·Êä³ö H/4£¬GT ÊÇÔ­Ê¼·Ö±æÂÊ ¡ú ÐèÔÚ loss ÖÐÏÂ²ÉÑù GT
-7. **Dice/CE mask Î¬¶È**£ºpred (B,C,H,W) vs mask (B,H,W) ¡ú Ðè `mask.unsqueeze(1).expand_as(pred)` »ò `pred.permute(0,2,3,1)[mask]`
+1. **ï¿½ï¿½ï¿½ï¿½Â·ï¿½ï¿½**ï¿½ï¿½V4 ï¿½ï¿½ï¿½ï¿½ï¿½Ð²ï¿½ï¿½ï¿½ `from HICD.` / `from MambaCD.`ï¿½ï¿½ï¿½ï¿½È«ï¿½ï¿½ï¿½ï¿½Îª `from HICD_v5.`
+2. **TARGET_VALID_STATES**ï¿½ï¿½V5 class_mapping ï¿½ï¿½ï¿½ï¿½ DatasetConfigï¿½ï¿½ï¿½ï¿½ HierarchicalInstanceHead ï¿½ï¿½Ö±ï¿½Óµï¿½ï¿½ï¿½ ï¿½ï¿½ ï¿½ï¿½ï¿½Ó¼ï¿½ï¿½ï¿½ï¿½Ô³ï¿½ï¿½ï¿½
+3. **ï¿½ï¿½ï¿½ï¿½Â·ï¿½ï¿½Ë«ï¿½ï¿½Æ´ï¿½ï¿½**ï¿½ï¿½`scene_dir` ï¿½Ñºï¿½ split Â·ï¿½ï¿½ï¿½ï¿½dataset ï¿½ï¿½Ó¦ï¿½ï¿½Æ´ `split`
+4. **target_state_mask Î¬ï¿½ï¿½**ï¿½ï¿½Ä¬ï¿½ï¿½ 10ï¿½ï¿½6ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Êµï¿½ï¿½ num_targets/num_states ï¿½ï¿½Ì¬ï¿½ï¿½ï¿½ï¿½
+5. **YAML ï¿½ï¿½ï¿½ï¿½**ï¿½ï¿½PowerShell ï¿½ï¿½ `Set-Content` ï¿½ï¿½ï¿½ BOM ï¿½ï¿½ï¿½ GBK ï¿½ï¿½ ï¿½ï¿½ Python Ð´ï¿½Ä¼ï¿½ï¿½ï¿½ï¿½Ú·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ `cat` Ð´ï¿½ï¿½
+6. **Loss ï¿½Ö±ï¿½ï¿½Ê¶ï¿½ï¿½ï¿½**ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Í·ï¿½ï¿½ï¿½ H/4ï¿½ï¿½GT ï¿½ï¿½Ô­Ê¼ï¿½Ö±ï¿½ï¿½ï¿½ ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ loss ï¿½ï¿½ï¿½Â²ï¿½ï¿½ï¿½ GT
+7. **Dice/CE mask Î¬ï¿½ï¿½**ï¿½ï¿½pred (B,C,H,W) vs mask (B,H,W) ï¿½ï¿½ ï¿½ï¿½ `mask.unsqueeze(1).expand_as(pred)` ï¿½ï¿½ `pred.permute(0,2,3,1)[mask]`
 
-## ÖÂÐ»
+## ï¿½ï¿½Ð»
 
-- [VMamba](https://github.com/MzeroMiko/VMamba) ¡ª VSSM ¹Ç¸ÉÍøÂç
-- [OpenCLIP](https://github.com/mlfoundations/open_clip) ¡ª ÎÄ±¾±àÂëÆ÷
-- [HICD](https://github.com/Ruikunw726/HICD) ¡ª V1-V4 »ù´¡¼Ü¹¹
-- [SECOND](https://captain-whu.github.io/SCD/) ¡ª ÓïÒå±ä»¯¼ì²âÊý¾Ý¼¯
+- [VMamba](https://github.com/MzeroMiko/VMamba) ï¿½ï¿½ VSSM ï¿½Ç¸ï¿½ï¿½ï¿½ï¿½ï¿½
+- [OpenCLIP](https://github.com/mlfoundations/open_clip) ï¿½ï¿½ ï¿½Ä±ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+- [HICD](https://github.com/Ruikunw726/HICD) ï¿½ï¿½ V1-V4 ï¿½ï¿½ï¿½ï¿½ï¿½Ü¹ï¿½
+- [SECOND](https://captain-whu.github.io/SCD/) ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ä»¯ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ý¼ï¿½

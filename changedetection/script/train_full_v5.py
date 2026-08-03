@@ -37,6 +37,7 @@ from HICD_v5.changedetection.models.class_mapping import (
     DatasetConfig, TARGET_NAMES, STATE_NAMES, NUM_TARGETS, NUM_STATES,
 )
 from HICD_v5.changedetection.script.metrics import InstanceMetrics, compute_model_stats
+from HICD_v5.changedetection.script.icd_eval_v5 import ICDEvalV5
 
 from osgeo import gdal
 gdal.UseExceptions()
@@ -220,10 +221,13 @@ class TrainerV5:
         self.start_epoch = 0
 
         # ── Metrics ──
-        self.metrics = InstanceMetrics(
-            num_targets=NUM_TARGETS, num_states=NUM_STATES,
-            target_names=TARGET_NAMES, state_names=STATE_NAMES,
+        self.instance_metrics = InstanceMetrics(
+            num_targets=dataset_config.num_targets if dataset_config else NUM_TARGETS,
+            num_states=dataset_config.num_states if dataset_config else NUM_STATES,
+            target_names=dataset_config.target_names if dataset_config else TARGET_NAMES,
+            state_names=dataset_config.state_names if dataset_config else STATE_NAMES,
         )
+        self.icd_eval = ICDEvalV5(dataset_config) if dataset_config else None
 
     def train_epoch(self, epoch):
         self.model.train()
@@ -287,12 +291,15 @@ class TrainerV5:
         return total_loss / max(num_batches, 1)
 
     @torch.no_grad()
+    @torch.no_grad()
     def validate(self):
         self.model.eval()
         if self.val_loader is None:
             return float('inf')
 
-        self.metrics.reset()
+        self.instance_metrics.reset()
+        if self.icd_eval:
+            self.icd_eval.reset()
         total_loss = 0
         num_batches = 0
 
@@ -316,26 +323,28 @@ class TrainerV5:
                 }
                 loss, _ = self.criterion(outputs, gt_data)
 
-            self.metrics.update(outputs['instance_outputs'], gt_boxes_list, gt_target_list, gt_state_list)
+            # Instance metrics (legacy)
+            self.instance_metrics.update(
+                outputs['instance_outputs'], gt_boxes_list, gt_target_list, gt_state_list)
+
+            # ICD-Eval V5 (dual-branch)
+            if self.icd_eval:
+                self.icd_eval.update(outputs, gt_data)
+
             total_loss += loss.item()
             num_batches += 1
 
         val_loss = total_loss / max(num_batches, 1)
-        self.val_results = self.metrics.compute()
+        self.val_results = self.instance_metrics.compute()
         self.val_results['val_loss'] = val_loss
 
-        # DEBUG: predicted class distribution
-        from collections import Counter
-        all_preds = []
-        for t in self.metrics.pred_targets_all:
-            all_preds.extend(t.numpy().tolist())
-        dist = Counter(all_preds)
-        total_preds = sum(dist.values())
-        dist_pct = {k: f'{v/total_preds*100:.1f}%' for k, v in dist.most_common(5)}
-        print(f"  [DEBUG] Top-5 predicted targets: {dist_pct}")
+        # ICD-Eval V5 results
+        if self.icd_eval:
+            icd_results = self.icd_eval.compute()
+            self.val_results.update(icd_results)
+            print(self.icd_eval.format(icd_results))
 
         return val_loss
-
     def train(self):
         print(f"\n{'='*60}")
         print(f"Starting training: {self.args.max_epochs} epochs")
@@ -370,7 +379,7 @@ class TrainerV5:
 
             print(f"\nEpoch {epoch+1}/{self.args.max_epochs} — "
                   f"Train: {train_loss:.4f} | Val: {val_loss:.4f}")
-            print(self.metrics.format_results(r))
+            print(self.instance_metrics.format_results(r))
 
             with open(log_path, 'a') as f:
                 f.write(f"{epoch+1},{train_loss:.6f},{val_loss:.6f},"
