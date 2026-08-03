@@ -71,22 +71,31 @@ HICD_v5/
 ```
 
 
-## Masked Dual-Branch Loss
+## 实际像素分布与损失设计
 
-**问题**：建筑占 91% 像素，语义分割 loss 被"预测背景"主导，Runway/Taxiway 的梯度信号被稀释。
+**实测像素占比（0617final Airports 前100张）：**
 
-**解决**：只在 `gt_target_mask > 0` 的语义目标区域计算 CE + Dice，背景区域不回传梯度。
+| 类别 | 像素占比 | 分支 |
+|------|---------|------|
+| Background | 56.98% | — |
+| Taxiway | 20.81% | 语义 |
+| Runway | 15.73% | 语义 |
+| Apron | 3.98% | 语义 |
+| Building | 2.00% | 实例 |
+| Farmland | 0.36% | 语义 |
+| Highway | 0.09% | 语义 |
+| Crater | 0.03% | 实例 |
+| Aircraft | 0.02% | 实例 |
 
-| 组件 | 改动前 | 改动后 |
-|------|--------|--------|
-| CE Loss | 整张图计算 | 只在语义目标像素计算 |
-| Dice Loss | 整张图计算 | 只在语义目标像素计算 |
-| 梯度回传 | 91% 背景 + 9% 目标 | 仅目标区域 |
+**关键发现**：
+- 语义分支目标占 41% 非背景像素，数据充足
+- 实例分支目标仅占 2%，是真正的少数派
+- 背景占 57%，需要排除
 
-**效果**：
-- 模型被迫聚焦学习分割 Runway/Taxiway 等语义目标
-- 分割 loss 不再被建筑背景淹没
-- `sem_pixel_ratio` 指标记录每 batch 语义像素占比，方便调试
+**损失设计**：
+- **Masked Loss**：排除 57% 背景，只在语义目标区域计算 CE + Dice
+- **Loss 权重**：`w_instance=3.0, w_semantic=1.0`，实例分支像素少需要更强梯度
+- **语义类别权重**：inverse frequency 平衡 Taxiway(20.8%) vs Highway(0.09%)
 
 ## 版本历史
 
@@ -96,7 +105,7 @@ HICD_v5/
 | V4 | 2026-07-30 | SD-SSM, Context-SSM, Pair-weighted Loss |
 | V4.2 | 2026-07-31 | SparseChangeGate |
 | V5 | 2026-08-03 | 双分支解码器：实例检测 + 语义分割，Task Adapters，DatasetConfig 路由，Dual-Branch Loss |
-| V5.1 | 2026-08-03 | Masked Dual-Branch Loss：语义分支只在目标区域计算损失，背景像素不回传梯度，避免 91% 建筑主导分割 loss |
+| V5.1 | 2026-08-03 | Masked Dual-Branch Loss + 实测像素分布分析：排除 57% 背景，w_instance=3.0 补偿实例分支 2% 像素占比，语义类别 inverse frequency 权重 |
 
 ## 致谢
 

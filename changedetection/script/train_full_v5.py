@@ -431,7 +431,7 @@ def main():
     parser.add_argument("--grad_accum", type=int, default=1)
     parser.add_argument("--grad_clip", type=float, default=1.0)
     # V5 dual-branch weights
-    parser.add_argument("--w_instance", type=float, default=1.0, help="实例分支损失权重")
+    parser.add_argument("--w_instance", type=float, default=3.0, help="实例分支损失权重（实例像素仅占2%，需要更强梯度）")
     parser.add_argument("--w_semantic", type=float, default=1.0, help="语义分支损失权重")
     # Output
     parser.add_argument("--output_dir", type=str, default="HICD/outputs")

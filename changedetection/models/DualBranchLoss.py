@@ -60,7 +60,7 @@ class DualBranchLoss(nn.Module):
     L_total = w_instance * L_instance + w_semantic * (L_CE + L_Dice)
     """
     def __init__(self, instance_loss, num_target_classes=5, num_state_classes=6,
-                 class_weights=None, w_instance=1.0, w_semantic=1.0):
+                 class_weights=None, w_instance=3.0, w_semantic=1.0):
         super().__init__()
         self.instance_loss = instance_loss
         self.w_instance = w_instance
